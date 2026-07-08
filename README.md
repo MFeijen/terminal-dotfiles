@@ -7,13 +7,15 @@ Works on Arch (with root) and no-root clusters (RHEL etc.).
 
 ```sh
 git clone <this-repo> ~/.dotfiles
-~/.dotfiles/install.sh              # tools + fish + kitty patch (if kitty present)
-~/.dotfiles/install.sh --with-helix # also build helix from source (rustup + cargo)
+~/.dotfiles/install.sh                          # tools + fish config + kitty patch
+~/.dotfiles/install.sh --with-helix             # also build helix from source
+~/.dotfiles/install.sh --with-fish --with-helix # full cluster setup (no root)
 ```
 
 Flags: `--force` reinstalls, `--dry-run` shows what would happen, `--with-helix`
-builds helix from source. Set `DOTFILES_ENV=arch-root|rhel-noroot|generic` to
-override auto-detection.
+builds helix from source, `--with-fish` builds fish 4.x from source
+(needs `cmake` + `ncurses-devel` present on the system; rustup is auto-bootstrapped).
+Set `DOTFILES_ENV=arch-root|rhel-noroot|generic` to override auto-detection.
 
 Idempotent — safe to re-run.
 

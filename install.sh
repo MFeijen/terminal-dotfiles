@@ -10,18 +10,21 @@ CARGO_BIN="$HOME/.cargo/bin"
 CONFIG="$HOME/.config"
 
 WITH_HELIX=0
+WITH_FISH=0
 FORCE=0
 DRY=0
 for arg in "$@"; do
     case "$arg" in
         --with-helix) WITH_HELIX=1 ;;
+        --with-fish)  WITH_FISH=1 ;;
         --force)      FORCE=1 ;;
         --dry-run)    DRY=1 ;;
         -h|--help)
             cat <<EOF
-Usage: install.sh [--with-helix] [--force] [--dry-run]
+Usage: install.sh [--with-helix] [--with-fish] [--force] [--dry-run]
 
   --with-helix   Also build helix from source (via rustup + cargo)
+  --with-fish    Also build fish shell from source (via rustup + cmake)
   --force        Reinstall tools even if already present
   --dry-run      Show what would happen, don't do it
 EOF
@@ -156,19 +159,21 @@ install_tool fastfetch fastfetch fastfetch-cli/fastfetch 'linux-amd64\.tar\.gz$'
 install_tool btop    btop    aristocratos/btop    'x86_64-unknown-linux-musl\.tar\.gz$'      ''
 install_tool glow    glow    charmbracelet/glow   'Linux_x86_64\.tar\.gz$'                   ''
 
-# --- optional: build helix from source --------------------------------------
+# --- optional: build from source (helix, fish) ------------------------------
+ensure_rust() {
+    if have cargo; then return 0; fi
+    log "  installing rustup (user-scope)"
+    run "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --no-modify-path"
+    export PATH="$CARGO_BIN:$PATH"
+}
+
 build_helix() {
     if have hx && ((!FORCE)); then
         log "helix: already installed ($(command -v hx))"
         return 0
     fi
     log "helix: bootstrapping"
-
-    if ! have cargo; then
-        log "  installing rustup (user-scope)"
-        run "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --no-modify-path"
-        export PATH="$CARGO_BIN:$PATH"
-    fi
+    ensure_rust
 
     local src="$HOME/.local/src/helix"
     if [[ -d "$src/.git" ]]; then
@@ -185,7 +190,30 @@ build_helix() {
     fi
 }
 
+build_fish() {
+    if have fish && ((!FORCE)); then
+        log "fish: already installed ($(command -v fish))"
+        return 0
+    fi
+    log "fish: bootstrapping (build from source)"
+
+    if ! have cmake; then err "fish build needs cmake — not found on PATH"; return 1; fi
+    ensure_rust
+
+    local src="$HOME/.local/src/fish-shell"
+    if [[ -d "$src/.git" ]]; then
+        run "git -C '$src' pull --ff-only"
+    else
+        run "mkdir -p '$(dirname "$src")' && git clone https://github.com/fish-shell/fish-shell '$src'"
+    fi
+    run "cd '$src' && cmake -B build -DCMAKE_INSTALL_PREFIX='$HOME/.local' -DCMAKE_BUILD_TYPE=Release && cmake --build build -j && cmake --install build"
+
+    log "fish installed to \$HOME/.local/bin/fish"
+    log "  to make it your default: echo 'exec \$HOME/.local/bin/fish' >> ~/.bashrc"
+}
+
 if ((WITH_HELIX)); then build_helix; fi
+if ((WITH_FISH));  then build_fish;  fi
 
 # --- fish conf.d -------------------------------------------------------------
 log "deploying fish conf.d"
