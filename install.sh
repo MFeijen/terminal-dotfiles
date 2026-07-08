@@ -131,10 +131,14 @@ install_tool() {
             install_via_paru "$arch_pkg" && return 0
             ;;
     esac
-    # no-root path: prebuilt binary → cargo fallback
+    # no-root path: prebuilt binary → cargo fallback → skip
     if install_binary "$bin" "$repo" "$pattern" "$bin"; then return 0; fi
-    warn "$bin: prebuilt binary failed, trying cargo"
-    install_via_cargo "$crate" "$bin"
+    if [[ -n "$crate" ]] && have cargo; then
+        warn "$bin: prebuilt binary failed, trying cargo"
+        install_via_cargo "$crate" "$bin" && return 0
+    fi
+    warn "$bin: install failed — skipping"
+    return 0
 }
 
 # --- tools -------------------------------------------------------------------
@@ -149,7 +153,7 @@ install_tool rg      ripgrep BurntSushi/ripgrep   'x86_64-unknown-linux-musl\.ta
 install_tool zoxide  zoxide  ajeetdsouza/zoxide   'x86_64-unknown-linux-musl\.tar\.gz$'     'zoxide'
 install_tool delta   git-delta dandavison/delta   'x86_64-unknown-linux-musl\.tar\.gz$'     'git-delta'
 install_tool fastfetch fastfetch fastfetch-cli/fastfetch 'linux-amd64\.tar\.gz$'             ''
-install_tool btop    btop    aristocratos/btop    'x86_64-linux-musl\.tbz$'                  ''
+install_tool btop    btop    aristocratos/btop    'x86_64-unknown-linux-musl\.tar\.gz$'      ''
 install_tool glow    glow    charmbracelet/glow   'Linux_x86_64\.tar\.gz$'                   ''
 
 # --- optional: build helix from source --------------------------------------
