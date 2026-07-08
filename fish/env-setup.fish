@@ -1,0 +1,53 @@
+# ~/.dotfiles env — dropped into ~/.config/fish/conf.d by install.sh
+# Kept minimal; project-specific overrides go in your usual fish config.
+
+# ~/.local/bin — where the no-root installer places prebuilt binaries.
+if not contains -- $HOME/.local/bin $PATH
+    set -gx PATH $HOME/.local/bin $PATH
+end
+
+# ~/.cargo/bin — cargo-installed tools (helix, fallback tool installs).
+if test -d $HOME/.cargo/bin; and not contains -- $HOME/.cargo/bin $PATH
+    set -gx PATH $HOME/.cargo/bin $PATH
+end
+
+# zoxide (smart cd) — provides `z` and `zi`.
+if type -q zoxide
+    zoxide init fish | source
+end
+
+# Modern-unix aliases — only if the tool is installed.
+if type -q eza
+    alias ls='eza --group-directories-first'
+    alias ll='eza -l --group-directories-first --git'
+    alias la='eza -la --group-directories-first --git'
+    alias tree='eza --tree'
+end
+
+if type -q bat
+    alias cat='bat --paging=never --style=plain'
+    set -gx BAT_THEME "base16"
+end
+
+# Greeting — fastfetch if installed, else silent.
+function fish_greeting
+    if type -q fastfetch
+        fastfetch
+    end
+end
+
+# Theme picker — loaded from the dotfiles repo.
+set -l theme_picker $HOME/.dotfiles/theme-system/theme-picker.fish
+if test -f $theme_picker
+    source $theme_picker
+end
+
+# yazi wrapper: cd into the directory yazi exits in.
+function y
+    set tmp (mktemp -t "yazi-cwd.XXXXXX")
+    command yazi $argv --cwd-file="$tmp"
+    if read -z cwd < "$tmp"; and [ "$cwd" != "$PWD" ]; and test -d "$cwd"
+        builtin cd -- "$cwd"
+    end
+    command rm -f -- "$tmp"
+end
