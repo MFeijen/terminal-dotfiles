@@ -38,19 +38,19 @@ $time\
 # and use the os module below
 [username]
 show_always = true
-style_user = "bg:purple"
-style_root = "bg:purple"
+style_user = "bg:purple fg:black"
+style_root = "bg:purple fg:black"
 format = '[$user ]($style)'
 disabled = false
 
 # An alternative to the username module which displays a symbol that
 # represents the current operating system
 [os]
-style = "bg:purple"
+style = "bg:purple fg:black"
 disabled = true # Disabled by default
 
 [directory]
-style = "bg:bright-purple"
+style = "bg:bright-purple fg:black"
 format = "[ $path ]($style)"
 truncation_length = 3
 truncation_symbol = "…/"
@@ -70,93 +70,93 @@ truncation_symbol = "…/"
 
 [c]
 symbol = " "
-style = "bg:bright-blue"
+style = "bg:bright-blue fg:black"
 format = '[ $symbol ($version) ]($style)'
 
 [cpp]
 symbol = " "
-style = "bg:bright-blue"
+style = "bg:bright-blue fg:black"
 format = '[ $symbol ($version) ]($style)'
 
 [docker_context]
 symbol = " "
-style = "bg:cyan"
+style = "bg:cyan fg:black"
 format = '[ $symbol $context ]($style)'
 
 [elixir]
 symbol = " "
-style = "bg:bright-blue"
+style = "bg:bright-blue fg:black"
 format = '[ $symbol ($version) ]($style)'
 
 [elm]
 symbol = " "
-style = "bg:bright-blue"
+style = "bg:bright-blue fg:black"
 format = '[ $symbol ($version) ]($style)'
 
 [git_branch]
 symbol = ""
-style = "bg:bright-red"
+style = "bg:bright-red fg:black"
 format = '[ $symbol $branch ]($style)'
 
 [git_status]
-style = "bg:bright-red"
+style = "bg:bright-red fg:black"
 format = '[$all_status$ahead_behind ]($style)'
 
 [golang]
 symbol = " "
-style = "bg:bright-blue"
+style = "bg:bright-blue fg:black"
 format = '[ $symbol ($version) ]($style)'
 
 [gradle]
-style = "bg:bright-blue"
+style = "bg:bright-blue fg:black"
 format = '[ $symbol ($version) ]($style)'
 
 [haskell]
 symbol = " "
-style = "bg:bright-blue"
+style = "bg:bright-blue fg:black"
 format = '[ $symbol ($version) ]($style)'
 
 [java]
 symbol = " "
-style = "bg:bright-blue"
+style = "bg:bright-blue fg:black"
 format = '[ $symbol ($version) ]($style)'
 
 [julia]
 symbol = " "
-style = "bg:bright-blue"
+style = "bg:bright-blue fg:black"
 format = '[ $symbol ($version) ]($style)'
 
 [maven]
-style = "bg:bright-blue"
+style = "bg:bright-blue fg:black"
 format = '[ $symbol ($version) ]($style)'
 
 [nodejs]
 symbol = ""
-style = "bg:bright-blue"
+style = "bg:bright-blue fg:black"
 format = '[ $symbol ($version) ]($style)'
 
 [bun]
 symbol = ""
-style = "bg:bright-blue"
+style = "bg:bright-blue fg:black"
 format = '[ $symbol ($version) ]($style)'
 
 [nim]
 symbol = "󰆥 "
-style = "bg:bright-blue"
+style = "bg:bright-blue fg:black"
 format = '[ $symbol ($version) ]($style)'
 
 [rust]
 symbol = ""
-style = "bg:bright-blue"
+style = "bg:bright-blue fg:black"
 format = '[ $symbol ($version) ]($style)'
 
 [scala]
 symbol = " "
-style = "bg:bright-blue"
+style = "bg:bright-blue fg:black"
 format = '[ $symbol ($version) ]($style)'
 
 [time]
 disabled = false
 time_format = "%R" # Hour:Minute Format
-style = "bg:blue"
+style = "bg:blue fg:black"
 format = '[ ♥ $time ]($style)'
