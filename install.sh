@@ -158,6 +158,7 @@ install_tool delta   git-delta dandavison/delta   'x86_64-unknown-linux-musl\.ta
 install_tool fastfetch fastfetch fastfetch-cli/fastfetch 'linux-amd64\.tar\.gz$'             ''
 install_tool btop    btop    aristocratos/btop    'x86_64-unknown-linux-musl\.tar\.gz$'      ''
 install_tool glow    glow    charmbracelet/glow   'Linux_x86_64\.tar\.gz$'                   ''
+install_tool starship starship starship/starship  'x86_64-unknown-linux-musl\.tar\.gz$'      'starship'
 
 # --- optional: build from source (helix, fish) ------------------------------
 ensure_rust() {
@@ -218,6 +219,10 @@ if ((WITH_FISH));  then build_fish;  fi
 # --- fish conf.d -------------------------------------------------------------
 log "deploying fish conf.d"
 run "ln -sfn '$DOTFILES/fish/env-setup.fish' '$CONFIG/fish/conf.d/env-setup.fish'"
+
+# --- starship config ---------------------------------------------------------
+log "deploying starship.toml"
+run "ln -sfn '$DOTFILES/starship/starship.toml' '$CONFIG/starship.toml'"
 
 # --- kitty patch (local only) ------------------------------------------------
 patch_kitty() {

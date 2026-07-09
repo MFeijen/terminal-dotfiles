@@ -16,6 +16,11 @@ if type -q zoxide
     zoxide init fish | source
 end
 
+# starship prompt.
+if type -q starship
+    starship init fish | source
+end
+
 # Modern-unix aliases — only if the tool is installed.
 if type -q eza
     alias ls='eza --group-directories-first'
