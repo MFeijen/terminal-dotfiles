@@ -34,6 +34,12 @@ if type -q bat
     set -gx BAT_THEME "base16"
 end
 
+# Route ssh through kitten so remote sessions get correct terminfo
+# (avoids TERM=xterm-kitty leaking to hosts without the entry).
+if type -q kitten
+    alias ssh='kitten ssh'
+end
+
 # Greeting — fastfetch if installed, else silent.
 function fish_greeting
     if type -q fastfetch
