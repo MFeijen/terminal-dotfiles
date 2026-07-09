@@ -163,29 +163,7 @@ install_tool fastfetch fastfetch fastfetch-cli/fastfetch 'linux-amd64\.tar\.gz$'
 install_tool btop    btop    aristocratos/btop    'x86_64-unknown-linux-musl\.tar\.gz$'      ''
 install_tool glow    glow    charmbracelet/glow   'Linux_x86_64\.tar\.gz$'                   ''
 install_tool starship starship starship/starship  'x86_64-unknown-linux-musl\.tar\.gz$'      'starship'
-
-# --- pip-installed tools ----------------------------------------------------
-# visidata (vd): TUI table viewer for .dat/CSV/TSV/JSON/etc. Python package,
-# no prebuilt binary — install via pipx or user-scope pip.
-install_visidata() {
-    if have vd && ((!FORCE)); then
-        log "visidata (vd): already installed ($(command -v vd))"
-        return 0
-    fi
-    log "visidata: installing"
-    case "$ENVKIND" in
-        arch-root) install_via_paru visidata && return 0 ;;
-    esac
-    if have pipx; then
-        run "pipx install visidata" && return 0
-    fi
-    if have python3; then
-        run "python3 -m pip install --user visidata" && return 0
-    fi
-    warn "visidata: no python3/pipx — skipping"
-    return 0
-}
-install_visidata
+install_tool csvlens csvlens YS-L/csvlens         'x86_64-unknown-linux-(musl|gnu)\.tar\.(gz|xz)$' 'csvlens'
 
 # --- optional: build from source (helix, fish) ------------------------------
 ensure_rust() {
