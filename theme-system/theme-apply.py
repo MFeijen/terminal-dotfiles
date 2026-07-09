@@ -43,6 +43,7 @@ THEME_DIRS = [
     HOME / ".config/helix/themes",
     HOME / "helix-ide/config/helix/themes",
     Path("/usr/lib/helix/runtime/themes"),
+    HOME / ".dotfiles/theme-system/themes",
 ]
 KITTY_THEME_OUT = HOME / ".config/kitty/theme-current.conf"
 HELIX_CONFIG = HOME / ".config/helix/config.toml"
