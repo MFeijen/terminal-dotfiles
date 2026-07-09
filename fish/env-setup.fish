@@ -40,9 +40,10 @@ if type -q kitten
     alias ssh='kitten ssh'
 end
 
-# Greeting — fastfetch if installed, else silent.
+# Greeting — fastfetch if installed, silent under SSH (remote binary may be
+# ABI-incompatible, e.g. old glibc on HPC login nodes).
 function fish_greeting
-    if type -q fastfetch
+    if type -q fastfetch; and not set -q SSH_CONNECTION
         fastfetch
     end
 end
