@@ -11,20 +11,24 @@ CONFIG="$HOME/.config"
 
 WITH_HELIX=0
 WITH_FISH=0
+CLUSTER=0
 FORCE=0
 DRY=0
 for arg in "$@"; do
     case "$arg" in
         --with-helix) WITH_HELIX=1 ;;
         --with-fish)  WITH_FISH=1 ;;
+        --cluster)    CLUSTER=1 ;;
         --force)      FORCE=1 ;;
         --dry-run)    DRY=1 ;;
         -h|--help)
             cat <<EOF
-Usage: install.sh [--with-helix] [--with-fish] [--force] [--dry-run]
+Usage: install.sh [--with-helix] [--with-fish] [--cluster] [--force] [--dry-run]
 
   --with-helix   Also build helix from source (via rustup + cargo)
   --with-fish    Also build fish shell from source (via rustup + cmake)
+  --cluster      Apply cluster-side fixes (guard bare 'fish' in ~/.bashrc so
+                 kitten ssh's non-interactive bootstrap can complete cleanly)
   --force        Reinstall tools even if already present
   --dry-run      Show what would happen, don't do it
 EOF
@@ -160,6 +164,29 @@ install_tool btop    btop    aristocratos/btop    'x86_64-unknown-linux-musl\.ta
 install_tool glow    glow    charmbracelet/glow   'Linux_x86_64\.tar\.gz$'                   ''
 install_tool starship starship starship/starship  'x86_64-unknown-linux-musl\.tar\.gz$'      'starship'
 
+# --- pip-installed tools ----------------------------------------------------
+# visidata (vd): TUI table viewer for .dat/CSV/TSV/JSON/etc. Python package,
+# no prebuilt binary — install via pipx or user-scope pip.
+install_visidata() {
+    if have vd && ((!FORCE)); then
+        log "visidata (vd): already installed ($(command -v vd))"
+        return 0
+    fi
+    log "visidata: installing"
+    case "$ENVKIND" in
+        arch-root) install_via_paru visidata && return 0 ;;
+    esac
+    if have pipx; then
+        run "pipx install visidata" && return 0
+    fi
+    if have python3; then
+        run "python3 -m pip install --user visidata" && return 0
+    fi
+    warn "visidata: no python3/pipx — skipping"
+    return 0
+}
+install_visidata
+
 # --- optional: build from source (helix, fish) ------------------------------
 ensure_rust() {
     if have cargo; then return 0; fi
@@ -256,6 +283,32 @@ patch_kitty() {
 }
 
 if have kitty; then patch_kitty; else log "kitty not installed — theme-system files still deployed"; fi
+
+# --- cluster-side bashrc patch ----------------------------------------------
+# Cluster login shells are typically bash. If ~/.bashrc launches fish
+# unconditionally, kitten ssh's non-interactive bootstrap gets replaced by
+# fish mid-transfer and kitty's shell-integration payload leaks as raw
+# commands. Guard the launch with an interactive-shell check and use exec
+# so bash doesn't sit around waiting on a nested fish.
+patch_bashrc_for_fish() {
+    local rc="$HOME/.bashrc"
+    if [[ ! -f "$rc" ]]; then
+        log "bashrc: not found — skipping"
+        return 0
+    fi
+    if grep -qE '^\[\[ \$- == \*i\* \]\] && exec fish' "$rc"; then
+        log "bashrc: already patched"
+        return 0
+    fi
+    if ! grep -qE '^\s*(exec\s+)?fish\s*$' "$rc"; then
+        log "bashrc: no bare 'fish' launch found — nothing to patch"
+        return 0
+    fi
+    log "bashrc: guarding fish launch (interactive-only, exec)"
+    run "sed -i.dotfiles.bak -E 's|^\s*(exec\s+)?fish\s*$|[[ \$- == *i* ]] \&\& exec fish|' '$rc'"
+}
+
+if ((CLUSTER)); then patch_bashrc_for_fish; fi
 
 log "done. restart kitty (or new tab) to pick up remote-control changes."
 log "run \`theme\` from fish to pick a theme."
