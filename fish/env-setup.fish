@@ -47,6 +47,12 @@ if test -f $theme_picker
     source $theme_picker
 end
 
+# Starship variant picker.
+set -l starship_picker $HOME/.dotfiles/starship/starship-picker.fish
+if test -f $starship_picker
+    source $starship_picker
+end
+
 # yazi wrapper: cd into the directory yazi exits in.
 function y
     set tmp (mktemp -t "yazi-cwd.XXXXXX")

@@ -221,8 +221,13 @@ log "deploying fish conf.d"
 run "ln -sfn '$DOTFILES/fish/env-setup.fish' '$CONFIG/fish/conf.d/env-setup.fish'"
 
 # --- starship config ---------------------------------------------------------
-log "deploying starship.toml"
-run "ln -sfn '$DOTFILES/starship/starship.toml' '$CONFIG/starship.toml'"
+# Only set the default on fresh installs — never stomp a user's chosen variant.
+if [[ ! -e "$CONFIG/starship.toml" ]]; then
+    log "deploying starship.toml (default: pure-preset)"
+    run "ln -sfn '$DOTFILES/starship/variants/pure-preset.toml' '$CONFIG/starship.toml'"
+else
+    log "starship.toml: already present — leaving as-is (use \`starship-style\` to switch)"
+fi
 
 # --- kitty patch (local only) ------------------------------------------------
 patch_kitty() {
