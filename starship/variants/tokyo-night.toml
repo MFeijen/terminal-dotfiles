@@ -1,0 +1,101 @@
+"$schema" = 'https://starship.rs/config-schema.json'
+
+format = """
+[░▒▓](bright-blue)\
+$os\
+[](bg:blue fg:bright-blue)\
+$directory\
+[](fg:blue bg:bright-black)\
+$git_branch\
+$git_status\
+[](fg:bright-black bg:black)\
+$nodejs\
+$bun\
+$rust\
+$golang\
+$php\
+[](fg:black bg:bright-black)\
+$time\
+[ ](fg:bright-black)\
+\n$character"""
+
+[directory]
+style = "fg:bright-white bg:blue"
+format = "[ $path ]($style)"
+truncation_length = 3
+truncation_symbol = "…/"
+
+[directory.substitutions]
+"Documents" = "󰈙 "
+"Downloads" = " "
+"Music" = " "
+"Pictures" = " "
+
+[git_branch]
+symbol = ""
+style = "bg:bright-black"
+format = '[[ $symbol $branch ](fg:blue bg:bright-black)]($style)'
+
+[git_status]
+style = "bg:bright-black"
+format = '[[($all_status$ahead_behind )](fg:blue bg:bright-black)]($style)'
+
+[nodejs]
+symbol = ""
+style = "bg:black"
+format = '[[ $symbol ($version) ](fg:blue bg:black)]($style)'
+
+[bun]
+symbol = ""
+style = "bg:black"
+format = '[[ $symbol ($version) ](fg:blue bg:black)]($style)'
+
+[rust]
+symbol = ""
+style = "bg:black"
+format = '[[ $symbol ($version) ](fg:blue bg:black)]($style)'
+
+[golang]
+symbol = ""
+style = "bg:black"
+format = '[[ $symbol ($version) ](fg:blue bg:black)]($style)'
+
+[php]
+symbol = ""
+style = "bg:black"
+format = '[[ $symbol ($version) ](fg:blue bg:black)]($style)'
+
+[time]
+disabled = false
+time_format = "%R" # Hour:Minute Format
+style = "bg:bright-black"
+format = '[[  $time ](fg:bright-white bg:bright-black)]($style)'
+
+[os]
+style = "bg:bright-blue fg:black"
+format = "[ $symbol ]($style)"
+disabled = false
+
+[os.symbols]
+Windows = "󰍲"
+Ubuntu = "󰕈"
+SUSE = ""
+Raspbian = "󰐿"
+Mint = "󰣭"
+Macos = "󰀵"
+Manjaro = ""
+Linux = "󰌽"
+Gentoo = "󰣨"
+Fedora = "󰣛"
+Alpine = ""
+Amazon = ""
+Android = ""
+AOSC = ""
+Arch = "󰣇"
+Artix = "󰣇"
+EndeavourOS = ""
+CentOS = ""
+Debian = "󰣚"
+Redhat = "󱄛"
+RedHatEnterprise = "󱄛"
+Pop = ""
