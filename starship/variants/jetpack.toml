@@ -144,7 +144,7 @@ symbol = "[▶](blue italic)"
 
 [localip]
 ssh_only = true
-format = " ◯[$localipv4](bold magenta)"
+format = " ◯[$localipv4](bold purple)"
 disabled = false
 
 [time]
@@ -193,10 +193,10 @@ disabled = false
 [git_status]
 style = "bold italic bright-blue"
 format = "([⎪$ahead_behind$staged$modified$untracked$renamed$deleted$conflicted$stashed⎥]($style))"
-conflicted = "[◪◦](italic bright-magenta)"
+conflicted = "[◪◦](italic bright-purple)"
 ahead = "[▴│[${count}](bold white)│](italic green)"
 behind = "[▿│[${count}](bold white)│](italic red)"
-diverged = "[◇ ▴┤[${ahead_count}](regular white)│▿┤[${behind_count}](regular white)│](italic bright-magenta)"
+diverged = "[◇ ▴┤[${ahead_count}](regular white)│▿┤[${behind_count}](regular white)│](italic bright-purple)"
 untracked = "[◌◦](italic bright-yellow)"
 stashed = "[◃◈](italic white)"
 modified = "[●◦](italic yellow)"
