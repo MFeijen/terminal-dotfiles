@@ -54,6 +54,7 @@ detect_env() {
     # We assume sudo is available if the user is in a machine's sudoers file;
     # can be overridden with DOTFILES_ENV=... env var.
     if [[ -n "${DOTFILES_ENV:-}" ]]; then echo "$DOTFILES_ENV"; return; fi
+    if [[ "$(uname -s)" == "Darwin" ]]; then echo "mac"; return; fi
     if have pacman && sudo -v -n 2>/dev/null; then echo "arch-root"; return; fi
     if have pacman; then echo "arch-noroot"; return; fi
     if [[ -f /etc/redhat-release ]]; then echo "rhel-noroot"; return; fi
@@ -124,8 +125,33 @@ install_via_paru() {
     fi
 }
 
+# --- homebrew installer (mac) -------------------------------------------------
+ensure_brew() {
+    if ! have brew; then
+        log "  installing Homebrew"
+        run '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
+    fi
+    local brew_bin=""
+    if [[ -x /opt/homebrew/bin/brew ]]; then brew_bin=/opt/homebrew/bin/brew
+    elif [[ -x /usr/local/bin/brew ]]; then brew_bin=/usr/local/bin/brew
+    else brew_bin=$(command -v brew || true); fi
+    [[ -n "$brew_bin" ]] && eval "$("$brew_bin" shellenv)"
+}
+
+install_via_brew() {
+    local pkg=$1 cask=${2:-0}
+    ensure_brew || return 1
+    if ((cask)); then
+        run "brew install --cask '$pkg'"
+    else
+        run "brew install '$pkg'"
+    fi
+}
+
 # --- unified tool install ----------------------------------------------------
-# usage: install_tool <bin> <arch-pkg> <github-repo> <asset-regex> <cargo-crate>
+# usage: install_tool <bin> <pkg-name> <github-repo> <asset-regex> <cargo-crate>
+# <pkg-name> doubles as the paru package name (arch-root) and the brew formula
+# name (mac) — they happen to match for every tool in the list below.
 install_tool() {
     local bin=$1 arch_pkg=$2 repo=$3 pattern=$4 crate=$5
     if have "$bin" && ((!FORCE)); then
@@ -137,6 +163,9 @@ install_tool() {
         arch-root)
             install_via_paru "$arch_pkg" && return 0
             ;;
+        mac)
+            install_via_brew "$arch_pkg" && return 0
+            ;;
     esac
     # no-root path: prebuilt binary → cargo fallback → skip
     if install_binary "$bin" "$repo" "$pattern" "$bin"; then return 0; fi
@@ -147,6 +176,34 @@ install_tool() {
     warn "$bin: install failed — skipping"
     return 0
 }
+
+# --- mac-only bootstrap -------------------------------------------------------
+# fish, kitty, and python3 (needed by theme-apply.py) aren't in the generic
+# install_tool list above since they need cask/shell-change/no-cargo-fallback
+# handling that doesn't apply to the other envs.
+setup_mac_essentials() {
+    if ! have python3; then
+        log "python3: installing (brew, needed by theme-apply.py)"
+        install_via_brew python
+    fi
+    if ! have fish; then
+        log "fish: installing (brew)"
+        install_via_brew fish
+    else
+        log "fish: already installed ($(command -v fish))"
+    fi
+    if ! have kitty; then
+        log "kitty: installing (brew cask)"
+        install_via_brew kitty 1
+    else
+        log "kitty: already installed ($(command -v kitty))"
+    fi
+}
+
+if [[ "$ENVKIND" == "mac" ]]; then
+    ensure_brew
+    setup_mac_essentials
+fi
 
 # --- tools -------------------------------------------------------------------
 # For no-root path: match the *asset name* from the release, not the binary name.
@@ -179,6 +236,10 @@ build_helix() {
         return 0
     fi
     log "helix: bootstrapping"
+    if [[ "$ENVKIND" == "mac" ]]; then
+        install_via_brew helix && return 0
+        warn "helix: brew install failed, falling back to source build"
+    fi
     ensure_rust
 
     local src="$HOME/.local/src/helix"
@@ -238,17 +299,16 @@ fi
 patch_kitty() {
     local conf="$CONFIG/kitty/kitty.conf"
     if [[ ! -f "$conf" ]]; then
-        log "kitty: no config found — skipping"
-        return 0
+        log "kitty: no config found — creating one"
+        run "mkdir -p '$CONFIG/kitty' && touch '$conf'"
     fi
     if grep -q 'theme-current.conf' "$conf"; then
         log "kitty: theme-current.conf already included"
     else
         log "kitty: including theme-current.conf"
-        # remove any existing include of the quickshell path
-        run "sed -i '/quickshell.*kitty-theme.conf/d' '$conf'"
-        # prepend our include
-        run "sed -i '1i include ~/.config/kitty/theme-current.conf' '$conf'"
+        # Portable in-place edit (avoids `sed -i` flag differences between
+        # GNU sed and macOS's BSD sed): rebuild the file via a temp copy.
+        run "grep -v 'quickshell.*kitty-theme.conf' '$conf' > '$conf.tmp' || true; { echo 'include ~/.config/kitty/theme-current.conf'; cat '$conf.tmp'; } > '$conf'; rm -f '$conf.tmp'"
     fi
     if ! grep -q '^allow_remote_control' "$conf"; then
         log "kitty: enabling remote control"
@@ -287,6 +347,28 @@ patch_bashrc_for_fish() {
 }
 
 if ((CLUSTER)); then patch_bashrc_for_fish; fi
+
+# --- mac: set fish as the login shell ----------------------------------------
+setup_fish_shell_mac() {
+    local fish_path
+    fish_path=$(command -v fish 2>/dev/null || true)
+    if [[ -z "$fish_path" ]]; then
+        warn "fish: not found — skipping default-shell change"
+        return 0
+    fi
+    if [[ "${SHELL:-}" == "$fish_path" ]]; then
+        log "fish: already the default shell"
+        return 0
+    fi
+    if ! grep -qxF "$fish_path" /etc/shells 2>/dev/null; then
+        log "fish: adding $fish_path to /etc/shells (sudo)"
+        run "echo '$fish_path' | sudo tee -a /etc/shells >/dev/null"
+    fi
+    log "fish: setting as default login shell (chsh — may prompt for your password)"
+    run "chsh -s '$fish_path'"
+}
+
+if [[ "$ENVKIND" == "mac" ]]; then setup_fish_shell_mac; fi
 
 log "done. restart kitty (or new tab) to pick up remote-control changes."
 log "run \`theme\` from fish to pick a theme."

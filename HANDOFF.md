@@ -163,6 +163,33 @@ Waiting for user to report which of a/b/c fail.
 - Cluster: RHEL, no root, rust already built there, helix already built there
 - Existing `~/dotfiles/` (no leading dot) is mylinuxforwork/dotfiles Hyprland pack — **don't touch it**
 
+## macOS support (added 2026-07-12)
+
+`detect_env()` returns `mac` on Darwin. `install_tool`'s brew branch reuses the
+existing `arch_pkg` column as the brew formula name (they match for every tool
+in the list — verified against homebrew-core). Mac-only additions, gated on
+`ENVKIND == mac`:
+- `ensure_brew`/`install_via_brew`: bootstraps Homebrew if missing, `eval`s
+  `brew shellenv` so PATH is correct for the rest of the script's run
+- `setup_mac_essentials`: installs python3 (needed by `theme-apply.py`'s
+  `tomllib`), fish, and kitty (cask) — none of these were in the generic
+  tool list since they need cask/shell-change handling
+- `build_helix` tries `brew install helix` before falling back to the
+  cargo source build
+- `patch_kitty` creates `kitty.conf` if absent (fresh installs won't have
+  one), and the quickshell-include removal was rewritten from `sed -i` to
+  `grep -v` + tmpfile — GNU `sed -i` and BSD/macOS `sed -i` have incompatible
+  flag syntax, this dodges it rather than branching on it
+- `setup_fish_shell_mac`: adds fish to `/etc/shells` and runs `chsh -s`
+  (user explicitly asked for this — it's a system-wide account change,
+  prompts for password)
+
+Not verified end-to-end on a real fresh Mac yet (built and reviewed, not
+run — user was on cellular data and wanted to test on wifi). `theme-picker.fish`
+was already portable for this: `theme-system/themes/` vendors the full helix
+theme catalog (see commit `368f43a`) so the picker works with zero themes
+installed, same mechanism that covers the RHEL cluster case.
+
 ## Style notes for future edits
 
 - User prefers terse responses, no fluff

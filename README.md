@@ -1,7 +1,7 @@
 # .dotfiles
 
 My CLI env — theme system + modern-unix tools + fish setup.
-Works on Arch (with root) and no-root clusters (RHEL etc.).
+Works on Arch (with root), macOS, and no-root clusters (RHEL etc.).
 
 ## Install
 
@@ -15,13 +15,29 @@ git clone <this-repo> ~/.dotfiles
 Flags: `--force` reinstalls, `--dry-run` shows what would happen, `--with-helix`
 builds helix from source, `--with-fish` builds fish 4.x from source
 (needs `cmake` + `ncurses-devel` present on the system; rustup is auto-bootstrapped).
-Set `DOTFILES_ENV=arch-root|rhel-noroot|generic` to override auto-detection.
+Set `DOTFILES_ENV=arch-root|mac|rhel-noroot|generic` to override auto-detection.
 
 Idempotent — safe to re-run.
 
+### macOS
+
+Detected automatically (`uname -s == Darwin`). On a blank machine the script:
+- bootstraps Homebrew if missing
+- installs python3, fish, and kitty (cask) via `brew`, then everything in the
+  tools list below via `brew install <formula>` (same package names as Arch)
+- creates `~/.config/kitty/kitty.conf` if it doesn't exist yet, so the theme
+  include still gets patched in
+- runs `chsh -s $(which fish)` to make fish your login shell (adds it to
+  `/etc/shells` first if needed) — this will prompt for your password
+- `--with-helix` installs helix via `brew` instead of building from source
+
+Not automated: a Nerd Font. Starship/eza/fastfetch icons need one for kitty to
+render correctly — `brew install --cask font-jetbrains-mono-nerd-font` and set
+it in kitty's `font_family`.
+
 ## What it installs
 
-**Tools** (via `paru` on Arch, prebuilt musl binaries elsewhere, `cargo install` fallback):
+**Tools** (via `paru` on Arch, `brew` on macOS, prebuilt musl binaries elsewhere, `cargo install` fallback):
 `fzf`, `bat`, `eza`, `fd`, `ripgrep`, `zoxide`, `delta`, `fastfetch`, `btop`, `glow`.
 
 **Fish conf.d** (`~/.config/fish/conf.d/env-setup.fish` symlink):
