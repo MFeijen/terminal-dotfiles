@@ -51,11 +51,12 @@ except ImportError:
             )
 
 HOME = Path.home()
+SCRIPT_DIR = Path(__file__).resolve().parent
 THEME_DIRS = [
     HOME / ".config/helix/themes",
     HOME / "helix-ide/config/helix/themes",
     Path("/usr/lib/helix/runtime/themes"),
-    HOME / ".dotfiles/theme-system/themes",
+    SCRIPT_DIR / "themes",
 ]
 KITTY_THEME_OUT = HOME / ".config/kitty/theme-current.conf"
 HELIX_CONFIG = HOME / ".config/helix/config.toml"

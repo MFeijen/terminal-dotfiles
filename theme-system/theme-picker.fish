@@ -18,7 +18,7 @@ function theme --description "Fuzzy-pick a helix theme; syncs kitty + helix live
         ~/.config/helix/themes \
         ~/helix-ide/config/helix/themes \
         /usr/lib/helix/runtime/themes \
-        ~/.dotfiles/theme-system/themes
+        "$script_dir/themes"
 
     set -l themes
     for d in $theme_dirs

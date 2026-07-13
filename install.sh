@@ -4,7 +4,8 @@
 
 set -euo pipefail
 
-DOTFILES="${DOTFILES:-$HOME/.dotfiles}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOTFILES="${DOTFILES:-$SCRIPT_DIR}"
 LOCAL_BIN="$HOME/.local/bin"
 CARGO_BIN="$HOME/.cargo/bin"
 CONFIG="$HOME/.config"
@@ -182,8 +183,10 @@ install_tool() {
 # install_tool list above since they need cask/shell-change/no-cargo-fallback
 # handling that doesn't apply to the other envs.
 setup_mac_essentials() {
-    if ! have python3; then
-        log "python3: installing (brew, needed by theme-apply.py)"
+    # macOS ships an old /usr/bin/python3 (no tomllib, needs 3.11+) that
+    # shadows brew's — check the version actually on PATH, not just presence.
+    if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
+        log "python3: installing (brew, needed by theme-apply.py's tomllib)"
         install_via_brew python
     fi
     if ! have fish; then
