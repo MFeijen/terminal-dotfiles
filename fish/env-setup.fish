@@ -20,6 +20,14 @@ if test -d $HOME/.cargo/bin; and not contains -- $HOME/.cargo/bin $PATH
     set -gx PATH $HOME/.cargo/bin $PATH
 end
 
+# Editor — helix. Set after the PATH blocks above so `hx` is resolvable.
+# yazi's built-in `edit` opener shells out to `$EDITOR` (defaulting to vi/vim
+# when unset), so this is what makes helix — not vim — the norm for yazi.
+if type -q hx
+    set -gx EDITOR hx
+    set -gx VISUAL hx
+end
+
 # zoxide (smart cd) — provides `z` and `zi`.
 if type -q zoxide
     zoxide init fish | source
