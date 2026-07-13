@@ -184,11 +184,70 @@ in the list — verified against homebrew-core). Mac-only additions, gated on
   (user explicitly asked for this — it's a system-wide account change,
   prompts for password)
 
-Not verified end-to-end on a real fresh Mac yet (built and reviewed, not
-run — user was on cellular data and wanted to test on wifi). `theme-picker.fish`
-was already portable for this: `theme-system/themes/` vendors the full helix
-theme catalog (see commit `368f43a`) so the picker works with zero themes
-installed, same mechanism that covers the RHEL cluster case.
+`theme-picker.fish` was already portable for this: `theme-system/themes/`
+vendors the full helix theme catalog (see commit `368f43a`) so the picker
+works with zero themes installed, same mechanism that covers the RHEL
+cluster case.
+
+**Verified end-to-end on the user's real Mac (2026-07-13)** — this surfaced
+bugs the design review didn't catch:
+- `install.sh` and `theme-apply.py` both hardcoded `~/.dotfiles` as the repo
+  path; the user's actual clone is `~/terminal-dotfiles`. Every symlink and
+  the theme-seed step pointed at nothing. Fixed by self-locating from the
+  script's own path (`SCRIPT_DIR`/`Path(__file__)`) instead of a hardcoded
+  name. `theme-picker.fish` and `fish/env-setup.fish` had the same hardcoded
+  fallback, fixed to match — `env-setup.fish` in particular resolves it via
+  `dirname (dirname (realpath (status -f)))` since it's loaded through a
+  symlink from `conf.d/`.
+- `setup_mac_essentials` checked `have python3`, true for macOS's bundled
+  `/usr/bin/python3` (3.9, no `tomllib`) — it shadowed brew's newer one and
+  never got replaced. Now checks the actual version on PATH.
+- Bigger one: once `chsh` makes fish the login shell, brew's `/opt/homebrew/bin`
+  vanishes from PATH entirely on a fresh terminal window — bash/zsh get it
+  from macOS's `/etc/paths.d/homebrew` via `path_helper`, which fish never
+  calls. Fixed by sourcing `brew shellenv fish` at the top of
+  `env-setup.fish`. This one's easy to miss in testing because a `fish`
+  launched *inside* an already-brew-configured zsh session inherits the
+  right PATH regardless — it only breaks on a real fresh login.
+- `chsh` also doesn't take effect for the *current* GUI session — loginwindow/
+  Terminal.app cache the shell from session start. Directory Services updates
+  immediately (`dscl`, `dscacheutil` all show it), but a log out/in or reboot
+  is needed before new windows actually launch fish. Not a bug, just a thing
+  to warn the user about every time.
+
+## tmux support (added 2026-07-13)
+
+Added at user request, with full live theming (not just tool-install) since
+`derive_palette()` in `theme-apply.py` already produces everything needed —
+tmux just needed to be a second consumer of it.
+
+- `install.sh`: `tmux` added to the `install_tool` list. It has no prebuilt
+  binaries (source tarballs only, no GitHub release assets) and no cargo
+  crate, so the no-root/generic fallback just skips it — acceptable since
+  tmux is usually already present on clusters anyway.
+- `patch_tmux()` mirrors `patch_kitty()`: creates `~/.tmux.conf` if absent,
+  appends `source-file -q ~/.config/tmux/theme-current.conf`. Deliberately
+  `~/.tmux.conf` and not the XDG `~/.config/tmux/tmux.conf` tmux 3.1+ also
+  checks — `~/.tmux.conf` works on every tmux version.
+- `theme-apply.py`: new `write_tmux_conf()`/`derive_tmux_style()` /
+  `reload_tmux()`. Key design point: tmux is a multiplexer, not a terminal
+  emulator — it has no ANSI-16 palette of its own (kitty supplies that
+  underneath it). So tmux only gets UI-chrome styling: status bar,
+  active/inactive window tabs, pane borders, message line, copy-mode
+  selection highlight (`mode-style`, mapped to the same selection colors
+  helix/kitty use). Accent color is `palette["color4"]` (blue) — used for
+  active pane border, current window highlight, and message-line background.
+- `reload_tmux()` only runs `tmux source-file` if a server is already
+  running (`tmux list-sessions` exit code) — otherwise it'd spawn a
+  throwaway server just to set options nothing would see, mirroring how
+  `reload_kitty`/`reload_helix` are also no-ops when those aren't running.
+- No changes needed to `theme-picker.fish` — it just calls
+  `theme-apply.py <name>`, which now handles kitty+tmux+helix internally.
+  The picker's fzf UI is a generic front-end already.
+- Verified live: wrote the file, sourced it into a real tmux session with
+  `tmux source-file`, confirmed `tmux show-options -g status-style` reflects
+  the new colors. Ran through `install.sh` for real — `patch_tmux` created
+  `~/.tmux.conf` and seeded `theme-current.conf` correctly on first run.
 
 ## Style notes for future edits
 

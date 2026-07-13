@@ -224,6 +224,10 @@ install_tool btop    btop    aristocratos/btop    'x86_64-unknown-linux-musl\.ta
 install_tool glow    glow    charmbracelet/glow   'Linux_x86_64\.tar\.gz$'                   ''
 install_tool starship starship starship/starship  'x86_64-unknown-linux-musl\.tar\.gz$'      'starship'
 install_tool csvlens csvlens YS-L/csvlens         'x86_64-unknown-linux-(musl|gnu)\.tar\.(gz|xz)$' 'csvlens'
+# tmux ships no prebuilt binaries (source tarballs only) and has no cargo
+# crate — the no-root path will just skip it. It's usually preinstalled on
+# clusters anyway, and arch-root/mac go through paru/brew like everything else.
+install_tool tmux     tmux    tmux/tmux             'no-prebuilt-binary-available'             ''
 
 # --- optional: build from source (helix, fish) ------------------------------
 ensure_rust() {
@@ -324,6 +328,30 @@ patch_kitty() {
 }
 
 if have kitty; then patch_kitty; else log "kitty not installed — theme-system files still deployed"; fi
+
+# --- tmux patch --------------------------------------------------------------
+# ~/.tmux.conf (not the XDG ~/.config/tmux/tmux.conf tmux 3.1+ also checks —
+# ~/.tmux.conf works on every tmux version, so keep it simple and universal).
+patch_tmux() {
+    local conf="$HOME/.tmux.conf"
+    if [[ ! -f "$conf" ]]; then
+        log "tmux: no config found — creating one"
+        run "touch '$conf'"
+    fi
+    if grep -q 'tmux/theme-current.conf' "$conf"; then
+        log "tmux: theme-current.conf already sourced"
+    else
+        log "tmux: sourcing theme-current.conf"
+        # -q: don't error at tmux startup if the generated file is ever missing
+        run "printf '\nsource-file -q ~/.config/tmux/theme-current.conf\n' >> '$conf'"
+    fi
+    # seed a theme if the file doesn't exist yet
+    if [[ ! -f "$CONFIG/tmux/theme-current.conf" ]]; then
+        run "python3 '$DOTFILES/theme-system/theme-apply.py' catppuccin_mocha"
+    fi
+}
+
+if have tmux; then patch_tmux; else log "tmux not installed — theme-system files still deployed"; fi
 
 # --- cluster-side bashrc patch ----------------------------------------------
 # Cluster login shells are typically bash. If ~/.bashrc launches fish
