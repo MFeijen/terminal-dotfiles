@@ -40,14 +40,24 @@ end
 
 if type -q bat
     alias cat='bat --paging=never --style=plain'
-    set -gx BAT_THEME "base16"
+    set -gx BAT_THEME base16
 end
 
 # Route ssh through kitten so remote sessions get correct terminfo
 # (avoids TERM=xterm-kitty leaking to hosts without the entry).
-if type -q kitten
-    alias ssh='kitten ssh'
-end
+# kitten ssh refuses outright when stdin isn't a real tty ("meant for
+# interactive use only"), which breaks non-interactive callers (scripts,
+# command substitution, VS Code Remote-SSH probes, `ssh host cmd < file`)
+# — fall back to plain ssh for those instead of erroring.
+# if type -q kitten
+#     function ssh --description 'kitten ssh, falling back to plain ssh when non-interactive'
+#         if isatty stdin
+#             kitten ssh $argv
+#         else
+#             command ssh $argv
+#         end
+#     end
+# end
 
 # Greeting — fastfetch if installed, silent under SSH (remote binary may be
 # ABI-incompatible, e.g. old glibc on HPC login nodes).
@@ -78,7 +88,7 @@ end
 function y
     set tmp (mktemp -t "yazi-cwd.XXXXXX")
     command yazi $argv --cwd-file="$tmp"
-    if read -z cwd < "$tmp"; and [ "$cwd" != "$PWD" ]; and test -d "$cwd"
+    if read -z cwd <"$tmp"; and [ "$cwd" != "$PWD" ]; and test -d "$cwd"
         builtin cd -- "$cwd"
     end
     command rm -f -- "$tmp"

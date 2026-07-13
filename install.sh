@@ -224,6 +224,7 @@ install_tool btop    btop    aristocratos/btop    'x86_64-unknown-linux-musl\.ta
 install_tool glow    glow    charmbracelet/glow   'Linux_x86_64\.tar\.gz$'                   ''
 install_tool starship starship starship/starship  'x86_64-unknown-linux-musl\.tar\.gz$'      'starship'
 install_tool csvlens csvlens YS-L/csvlens         'x86_64-unknown-linux-(musl|gnu)\.tar\.(gz|xz)$' 'csvlens'
+install_tool yazi    yazi    sxyazi/yazi          'x86_64-unknown-linux-musl\.zip$'                'yazi-fm'
 # tmux ships no prebuilt binaries (source tarballs only) and has no cargo
 # crate — the no-root path will just skip it. It's usually preinstalled on
 # clusters anyway, and arch-root/mac go through paru/brew like everything else.
@@ -292,6 +293,20 @@ if ((WITH_FISH));  then build_fish;  fi
 # --- fish conf.d -------------------------------------------------------------
 log "deploying fish conf.d"
 run "ln -sfn '$DOTFILES/fish/env-setup.fish' '$CONFIG/fish/conf.d/env-setup.fish'"
+
+# --- helix config -------------------------------------------------------------
+# config.toml is helix's only config file (no include mechanism), and
+# theme-apply.py rewrites the `theme = "..."` line in place — so symlinking
+# the repo's copy in means theme switches edit the tracked file, same as
+# they already did before this was tracked. Back up any pre-existing real
+# file once so a hand-edited config isn't silently lost.
+log "deploying helix config"
+run "mkdir -p '$CONFIG/helix'"
+if [[ -e "$CONFIG/helix/config.toml" && ! -L "$CONFIG/helix/config.toml" ]]; then
+    log "helix: existing config.toml found — backing up to config.toml.bak"
+    run "mv '$CONFIG/helix/config.toml' '$CONFIG/helix/config.toml.bak'"
+fi
+run "ln -sfn '$DOTFILES/helix/config.toml' '$CONFIG/helix/config.toml'"
 
 # --- starship config ---------------------------------------------------------
 # Only set the default on fresh installs — never stomp a user's chosen variant.

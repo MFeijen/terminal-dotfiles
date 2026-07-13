@@ -1,0 +1,27 @@
+theme = "catppuccin_mocha"
+
+[editor.cursor-shape]
+normal = "block"
+insert = "bar"
+select = "underline"
+
+[keys.normal]
+# space+e: open yazi in the current file's directory; the file picked in
+# yazi (its "chooser") gets opened as a new buffer. Needs helix 25.01+ for
+# the %{buffer_name}/%sh{} expansions. The escape sequence resets terminal
+# state (alt-screen + bracketed paste) so helix's display doesn't get
+# corrupted after yazi (an interactive TUI) hands control back.
+space.e = [
+    ":sh rm -f /tmp/hx-yazi-chooser",
+    ':insert-output yazi "%{buffer_name}" --chooser-file=/tmp/hx-yazi-chooser',
+    ':sh printf "\x1b[?1049h\x1b[?2004h" > /dev/tty',
+    ":open %sh{cat /tmp/hx-yazi-chooser}",
+    ":redraw",
+]
+
+# buffer switching for multitasking between open files. `gn`/`gp` and the
+# `space b` buffer picker are already built into helix; these are just
+# faster single-key alternates.
+"A-," = "goto_previous_buffer"
+"A-." = "goto_next_buffer"
+"A-w" = ":buffer-close"

@@ -38,9 +38,19 @@ it in kitty's `font_family`.
 ## What it installs
 
 **Tools** (via `paru` on Arch, `brew` on macOS, prebuilt musl binaries elsewhere, `cargo install` fallback):
-`fzf`, `bat`, `eza`, `fd`, `ripgrep`, `zoxide`, `delta`, `fastfetch`, `btop`, `glow`, `tmux`.
+`fzf`, `bat`, `eza`, `fd`, `ripgrep`, `zoxide`, `delta`, `fastfetch`, `btop`, `glow`, `csvlens`, `yazi`, `tmux`.
 (`tmux` has no prebuilt binaries or cargo crate — the no-root/generic path just
 skips it if it's not already there; it usually is on clusters.)
+
+**Helix config** (`~/.config/helix/config.toml` symlink — any pre-existing
+real file is backed up to `config.toml.bak` first):
+- cursor changes shape per mode: block (normal), bar (insert), underline (select)
+- `space e` — open yazi in the current file's directory; picking a file opens
+  it as a new buffer (needs helix 25.01+ for the `%{buffer_name}`/`%sh{}`
+  expansions it relies on)
+- `A-,` / `A-.` — previous/next buffer (also available as the built-in `gp`/`gn`)
+- `A-w` — close the current buffer
+- `space b` — buffer picker (built into helix, no config needed)
 
 **Fish conf.d** (`~/.config/fish/conf.d/env-setup.fish` symlink):
 - `~/.local/bin` and `~/.cargo/bin` on PATH
@@ -98,4 +108,6 @@ locally-relevant theme (status bar colors don't need to match your laptop).
   line.
 - Fish: `rm ~/.config/fish/conf.d/env-setup.fish`.
 - Helix: pick any theme normally via `:theme` — `theme-apply.py` no longer
-  rewrites `config.toml` once you stop calling it.
+  rewrites `config.toml` once you stop calling it. To drop the tracked config
+  entirely: `rm ~/.config/helix/config.toml` and restore
+  `config.toml.bak` if install.sh made one.
