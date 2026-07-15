@@ -249,6 +249,77 @@ tmux just needed to be a second consumer of it.
   the new colors. Ran through `install.sh` for real — `patch_tmux` created
   `~/.tmux.conf` and seeded `theme-current.conf` correctly on first run.
 
+## gtop support (added 2026-07-14)
+
+Reported as "theme does not work for gtop" — colors didn't change at all while
+kitty/helix/tmux did.
+
+Root cause (traced through source, not guessed): gtop is *not* a color-model
+problem. Its colors are the six blessed named colors (`utils.colors =
+['magenta','cyan','blue','yellow','green','red']`), all ANSI indices 1–6.
+blessed emits those as plain SGR `\e[31m`–`\e[36m` (program.js: the `color <
+16` branch), and the line graphs go through drawille-canvas which does the same
+(`'\033[3' + colors[name] + 'm'`). So every cell is *palette-indexed* — kitty
+renders it from the themeable `color1`–`color6` that `theme-apply.py` already
+writes. gtop inherits from kitty for free, exactly like yazi/Claude Code.
+
+The bug was **delivery, not color**: kitty's `set-colors` updates the palette
+for future output but does not retroactively recolor already-drawn cells, and
+blessed's normal per-frame `render()` only re-emits cells whose glyph changed
+(diffed against `olines`). A mostly-static graph therefore never re-emits its
+color codes, so it keeps whatever kitty resolved at first draw. kitty/helix/tmux
+looked fine only because each gets an explicit full-redraw trigger
+(`set-colors` default fg/bg, `source-file`, `SIGUSR1`); gtop got none.
+
+Fix: `reload_gtop()` sends `pkill -SIGWINCH -f gtop`. SIGWINCH → blessed
+`screen.alloc()` (resets `olines`, clears screen) + `render()` = full repaint,
+re-emitting every cell against kitty's now-updated palette. Direct analog of
+`reload_helix()`'s `pkill -SIGUSR1 -x hx`. Uses `-f` (argv match) not `-x`
+because the process name is `node`, with gtop in its arguments. Called after
+`reload_kitty()` so the palette is already updated when gtop repaints; harmless
+no-op (`check=False`, rc 1) when gtop isn't running. SIGWINCH's default
+disposition is "ignore", so a loose `-f gtop` match can't damage bystanders.
+
+Not added: gtop to the `install.sh` tool list — it's an npm package, out of
+scope for the current installer, and wasn't requested.
+
+## Switched tmux → zellij (2026-07-15)
+
+Dropped tmux entirely, replaced with zellij as the multiplexer. Same "second
+consumer of `derive_palette()`" model as tmux was — only the delivery mechanism
+differs, because zellij's theming works nothing like tmux's.
+
+- `install.sh`: `tmux` line in the `install_tool` list → `zellij`
+  (`zellij-org/zellij`, `x86_64-unknown-linux-musl.tar.gz`, cargo crate
+  `zellij`). Unlike tmux, zellij ships prebuilt binaries *and* has a crate, so
+  the no-root/generic path installs it too — no special-casing.
+- **Key difference from tmux — delivery.** tmux sourced a separate generated
+  file (`theme-current.conf`) and reloaded via `tmux source-file`. zellij has
+  no KDL `include`/`source` mechanism, and — critically — only live-reloads
+  themes defined *inline in the main config*; themes dropped in the `themes/`
+  folder are read once at startup and not watched. So `theme-apply.py` owns a
+  delimited block (`>>> theme-system … <<< theme-system` KDL line comments)
+  written straight into `~/.config/zellij/config.kdl`. `write_zellij_conf()`
+  regex-replaces that block in place (or appends it) and leaves the rest of the
+  user's config untouched.
+- **No reload signal.** Because the theme is inline, zellij's own config watcher
+  live-reloads it the instant the file is written — so there's no
+  `reload_zellij()` at all (the tmux analog `reload_tmux()` was deleted). The
+  write *is* the signal. This is the one spot where zellij is simpler than tmux.
+- `derive_zellij_theme()` replaces `derive_tmux_style()`. zellij's classic theme
+  format is just `fg`/`bg` + the eight base ANSI hues + `orange`; zellij derives
+  all its own chrome (tab bar, status line, pane frames) from those, so we don't
+  hand-map individual UI elements the way tmux's `status-style` etc. required.
+  ANSI-16 has no dedicated orange → mapped to `color3` (yellow), nearest hue.
+  Colors emitted as hex strings (`fg "#rrggbb"`), which the classic format
+  accepts.
+- `patch_zellij()` replaces `patch_tmux()`: if config.kdl doesn't already
+  contain the `theme-system` marker, run `theme-apply.py` once to seed it
+  (creating config.kdl if absent). `grep -qs` tolerates the missing file.
+- README updated (tool list, patch section, theme-system + cluster + reverting
+  paragraphs). Reverting is now "delete the marked block from config.kdl".
+- No changes to `theme-picker.fish` — it just calls `theme-apply.py <name>`.
+
 ## Style notes for future edits
 
 - User prefers terse responses, no fluff

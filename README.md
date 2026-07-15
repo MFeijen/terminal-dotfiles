@@ -38,9 +38,9 @@ it in kitty's `font_family`.
 ## What it installs
 
 **Tools** (via `paru` on Arch, `brew` on macOS, prebuilt musl binaries elsewhere, `cargo install` fallback):
-`fzf`, `bat`, `eza`, `fd`, `ripgrep`, `zoxide`, `delta`, `fastfetch`, `btop`, `glow`, `csvlens`, `yazi`, `tmux`.
-(`tmux` has no prebuilt binaries or cargo crate — the no-root/generic path just
-skips it if it's not already there; it usually is on clusters.)
+`fzf`, `bat`, `eza`, `fd`, `ripgrep`, `zoxide`, `delta`, `fastfetch`, `btop`, `glow`, `csvlens`, `yazi`, `zellij`.
+(`zellij` ships prebuilt musl binaries and a cargo crate, so every install path
+handles it.)
 
 **Helix config** (`~/.config/helix/config.toml` symlink — any pre-existing
 real file is backed up to `config.toml.bak` first):
@@ -66,9 +66,9 @@ real file is backed up to `config.toml.bak` first):
 - adds `allow_remote_control socket-only` + `listen_on`
 - removes any quickshell-generated theme include
 
-**tmux patch** (skipped if tmux absent):
-- creates `~/.tmux.conf` if it doesn't exist yet
-- appends `source-file -q ~/.config/tmux/theme-current.conf`
+**zellij patch** (skipped if zellij absent):
+- seeds a managed theme block into `~/.config/zellij/config.kdl` (creating the
+  file if needed) by running `theme-apply.py` once
 
 ## Theme system
 
@@ -81,31 +81,31 @@ theme, writes `~/.config/kitty/theme-current.conf`, updates `theme = "..."` in
 `~/.config/helix/config.toml`, calls `kitty @ set-colors --all --configured`,
 and sends `SIGUSR1` to all `hx` processes (buffer-safe reload).
 
-It also writes `~/.config/tmux/theme-current.conf` — status bar, pane
-borders, message line, and copy-mode selection highlight, derived from the
-same palette. tmux has no ANSI-16 palette of its own (kitty supplies that
-underneath it), so this only covers tmux's own UI chrome, not syntax colors.
-If a tmux server is already running, `tmux source-file` reloads it live the
-same way `kitty @ set-colors` does.
+It also rewrites a managed `themes { theme-current { ... } }` block in
+`~/.config/zellij/config.kdl` — tab bar, status line, and pane frames, derived
+from the same palette. zellij has no ANSI-16 palette of its own (kitty supplies
+that underneath it), so this only covers zellij's own UI chrome, not syntax
+colors. The theme is inline in the main config, which zellij watches and
+live-reloads on write — no reload signal needed, unlike `kitty @ set-colors`.
 
 Yazi and Claude Code inherit from kitty's palette — no code needed there.
 
 ## Cluster caveat
 
-The theme picker's kitty/tmux repaint steps only run where those tools are
+The theme picker's kitty/zellij repaint steps only run where those tools are
 installed. On the cluster, install grabs the tools and the fish env, skips
 whichever patch doesn't apply. Terminal colors on the cluster come from your
 *local* kitty via SSH — theme changes on your laptop propagate to your
-remote helix for free. tmux, if present on the cluster, gets its own
-locally-relevant theme (status bar colors don't need to match your laptop).
+remote helix for free. zellij, if present on the cluster, gets its own
+locally-relevant theme (its UI-chrome colors don't need to match your laptop).
 
 ## Reverting
 
 - Kitty: edit `~/.config/kitty/kitty.conf`, remove the `include
   theme-current.conf` line and the `allow_remote_control` line. Optionally
   re-add quickshell's include.
-- tmux: edit `~/.tmux.conf`, remove the `source-file ... theme-current.conf`
-  line.
+- zellij: edit `~/.config/zellij/config.kdl`, delete the `theme-system` block
+  (everything between the `>>> theme-system` and `<<< theme-system` markers).
 - Fish: `rm ~/.config/fish/conf.d/env-setup.fish`.
 - Helix: pick any theme normally via `:theme` — `theme-apply.py` no longer
   rewrites `config.toml` once you stop calling it. To drop the tracked config

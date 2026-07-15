@@ -225,10 +225,9 @@ install_tool glow    glow    charmbracelet/glow   'Linux_x86_64\.tar\.gz$'      
 install_tool starship starship starship/starship  'x86_64-unknown-linux-musl\.tar\.gz$'      'starship'
 install_tool csvlens csvlens YS-L/csvlens         'x86_64-unknown-linux-(musl|gnu)\.tar\.(gz|xz)$' 'csvlens'
 install_tool yazi    yazi    sxyazi/yazi          'x86_64-unknown-linux-musl\.zip$'                'yazi-fm'
-# tmux ships no prebuilt binaries (source tarballs only) and has no cargo
-# crate — the no-root path will just skip it. It's usually preinstalled on
-# clusters anyway, and arch-root/mac go through paru/brew like everything else.
-install_tool tmux     tmux    tmux/tmux             'no-prebuilt-binary-available'             ''
+# zellij ships prebuilt musl binaries and has a cargo crate, so every path
+# (paru/brew/prebuilt/cargo) can install it — no special-casing needed.
+install_tool zellij   zellij  zellij-org/zellij     'x86_64-unknown-linux-musl\.tar\.gz$'      'zellij'
 
 # --- optional: build from source (helix, fish) ------------------------------
 ensure_rust() {
@@ -344,29 +343,22 @@ patch_kitty() {
 
 if have kitty; then patch_kitty; else log "kitty not installed — theme-system files still deployed"; fi
 
-# --- tmux patch --------------------------------------------------------------
-# ~/.tmux.conf (not the XDG ~/.config/tmux/tmux.conf tmux 3.1+ also checks —
-# ~/.tmux.conf works on every tmux version, so keep it simple and universal).
-patch_tmux() {
-    local conf="$HOME/.tmux.conf"
-    if [[ ! -f "$conf" ]]; then
-        log "tmux: no config found — creating one"
-        run "touch '$conf'"
-    fi
-    if grep -q 'tmux/theme-current.conf' "$conf"; then
-        log "tmux: theme-current.conf already sourced"
+# --- zellij patch ------------------------------------------------------------
+# zellij has no KDL include mechanism and only live-reloads themes defined
+# inline in the main config, so theme-apply.py writes a managed block straight
+# into ~/.config/zellij/config.kdl. Seeding just means running it once if that
+# block isn't there yet (it creates config.kdl too if absent).
+patch_zellij() {
+    local conf="$CONFIG/zellij/config.kdl"
+    if grep -qs 'theme-system' "$conf"; then
+        log "zellij: theme block already present"
     else
-        log "tmux: sourcing theme-current.conf"
-        # -q: don't error at tmux startup if the generated file is ever missing
-        run "printf '\nsource-file -q ~/.config/tmux/theme-current.conf\n' >> '$conf'"
-    fi
-    # seed a theme if the file doesn't exist yet
-    if [[ ! -f "$CONFIG/tmux/theme-current.conf" ]]; then
+        log "zellij: seeding theme block into config.kdl"
         run "python3 '$DOTFILES/theme-system/theme-apply.py' catppuccin_mocha"
     fi
 }
 
-if have tmux; then patch_tmux; else log "tmux not installed — theme-system files still deployed"; fi
+if have zellij; then patch_zellij; else log "zellij not installed — theme-system files still deployed"; fi
 
 # --- cluster-side bashrc patch ----------------------------------------------
 # Cluster login shells are typically bash. If ~/.bashrc launches fish
