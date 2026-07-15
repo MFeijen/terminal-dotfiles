@@ -60,6 +60,10 @@ real file is backed up to `config.toml.bak` first):
 - `y` — yazi wrapper that `cd`s into the exit directory
 - `theme` — the theme picker
 - `fish_greeting` — runs `fastfetch` if installed
+- **zellij session prompt** — on opening an interactive terminal, offers to
+  start a new zellij session, attach to an existing/exited one, or drop into a
+  plain shell. Skipped when already inside zellij or when `ZELLIJ_NO_AUTOSTART`
+  is set. Enter = new, a listed number = attach that session, `s` = plain shell.
 
 **Kitty patch** (local only, skipped if kitty absent):
 - prepends `include ~/.config/kitty/theme-current.conf`

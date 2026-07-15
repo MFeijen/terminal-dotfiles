@@ -320,6 +320,36 @@ differs, because zellij's theming works nothing like tmux's.
   paragraphs). Reverting is now "delete the marked block from config.kdl".
 - No changes to `theme-picker.fish` — it just calls `theme-apply.py <name>`.
 
+### Session prompt at terminal startup
+
+`zellij/zellij-startup.fish` (sourced from `env-setup.fish`, same standalone-file
+pattern as the theme/starship pickers — no new install.sh symlink needed since
+`env-setup.fish` resolves the repo root and sources it). Runs during conf.d
+sourcing (before the first prompt) so a choice drops you straight into a session.
+
+- Guards, all early-`return`: non-interactive shell, zellij not installed,
+  already inside a session (`$ZELLIJ`), opt-out (`$ZELLIJ_NO_AUTOSTART`), or no
+  tty on stdin/stdout. The `$ZELLIJ` guard is what keeps new panes/subshells
+  inside a session from re-prompting.
+- Menu from `zellij list-sessions --short --no-formatting` (names only, no ANSI;
+  includes exited-but-resurrectable sessions — `zellij attach <name>` resurrects
+  a dead one). Enter/`n` → new session, a listed number → attach that one,
+  `s`/anything else → plain shell (out-of-range numbers fall through to plain).
+- Runs zellij, does **not** `exec` it — quitting/detaching (Ctrl-o d) returns to
+  a normal shell instead of closing the terminal, which keeps the "plain shell"
+  option meaningful. Swap to `exec zellij` if you want the terminal to close
+  with the session.
+- Left-aligned menu, one line per option, colored via `set_color` with ANSI
+  color *names* (green keys, cyan session names, magenta title) — names not hex,
+  so they resolve through the palette kitty+zellij already themed and the menu
+  matches the active theme for free. A fancier *centered* box was tried and
+  reverted — the fish-quoting fragility (command-sub eating newlines, `_` being
+  read-only) wasn't worth it for a prompt that only flashes before you pick. The
+  color survived that revert; only the centering/box/screen-clear were dropped.
+- Verified: fish `-n` syntax, guard no-ops (`$ZELLIJ` set, non-interactive,
+  opt-out), and the dispatch table for every input class
+  (attach/new/skip/out-of-range/junk).
+
 ## Style notes for future edits
 
 - User prefers terse responses, no fluff
