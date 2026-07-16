@@ -317,23 +317,74 @@ def render_zellij_block(palette):
     return "\n".join(lines) + "\n"
 
 
+def _strip_managed_block(text):
+    """Remove our own delimited block (markers + contents), if present."""
+    pattern = re.compile(
+        re.escape(ZELLIJ_BLOCK_START) + r".*?" + re.escape(ZELLIJ_BLOCK_END) + r"\n?",
+        re.DOTALL,
+    )
+    return pattern.sub("", text)
+
+
+def _strip_foreign_theme_current(text):
+    """Remove any *other* `theme-current` definition that would shadow ours.
+
+    zellij has no include mechanism, so we own an appended block (see
+    ZELLIJ_BLOCK_START). The catch: opening zellij's configuration plugin — or
+    anything that makes zellij re-serialize config.kdl — rewrites the file into
+    its fully-materialized form, freezing the *then-current* theme into a
+    `themes { theme-current { ... } }` block (in zellij's newer component
+    format) near the top, plus its own top-level `theme "theme-current"` line.
+    Those duplicates take precedence over our appended block, so theme switches
+    silently stop affecting zellij. Strip them here so our block is the sole
+    definition; a rewrite is healed by the next `theme` invocation.
+
+    Call this *after* _strip_managed_block so our own block isn't matched.
+    """
+    # 1. Brace-balanced removal of any top-level `themes { ... }` block whose
+    #    body mentions theme-current. Collect spans first, delete last-first so
+    #    earlier indices stay valid.
+    spans = []
+    for m in re.finditer(r"(?m)^themes[^\S\n]*\{", text):
+        depth = 0
+        k = m.end() - 1  # index of the opening brace
+        while k < len(text):
+            c = text[k]
+            if c == "{":
+                depth += 1
+            elif c == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+            k += 1
+        end = k + 1
+        if ZELLIJ_THEME_NAME in text[m.start():end]:
+            if end < len(text) and text[end] == "\n":
+                end += 1
+            spans.append((m.start(), end))
+    for start, end in reversed(spans):
+        text = text[:start] + text[end:]
+
+    # 2. Remove stray top-level `theme "..."` directives (zellij materializes
+    #    one). `\s+` after the bare word keeps `theme_dark`/`theme_light` and
+    #    commented `// theme ...` lines untouched.
+    text = re.sub(r'(?m)^theme[^\S\n]+"[^"]*"[^\n]*\n?', "", text)
+    return text
+
+
 def write_zellij_conf(palette):
     ZELLIJ_CONFIG.parent.mkdir(parents=True, exist_ok=True)
     block = render_zellij_block(palette)
     if ZELLIJ_CONFIG.is_file():
         text = ZELLIJ_CONFIG.read_text()
-        # Replace an existing managed block in place; otherwise append one,
-        # leaving the rest of the user's config.kdl untouched.
-        pattern = re.compile(
-            re.escape(ZELLIJ_BLOCK_START) + r".*?" + re.escape(ZELLIJ_BLOCK_END) + r"\n?",
-            re.DOTALL,
-        )
-        if pattern.search(text):
-            text = pattern.sub(block, text, count=1)
-        else:
-            if text and not text.endswith("\n"):
-                text += "\n"
-            text += block
+        text = _strip_managed_block(text)
+        text = _strip_foreign_theme_current(text)
+        # Re-append our block as the sole theme-current definition, leaving the
+        # rest of the user's config.kdl untouched.
+        text = text.rstrip("\n")
+        if text:
+            text += "\n"
+        text += block
     else:
         text = block
     ZELLIJ_CONFIG.write_text(text)
