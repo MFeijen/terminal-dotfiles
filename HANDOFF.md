@@ -339,13 +339,18 @@ sourcing (before the first prompt) so a choice drops you straight into a session
   a normal shell instead of closing the terminal, which keeps the "plain shell"
   option meaningful. Swap to `exec zellij` if you want the terminal to close
   with the session.
-- Left-aligned menu, one line per option, colored via `set_color` with ANSI
-  color *names* (green keys, cyan session names, magenta title) — names not hex,
-  so they resolve through the palette kitty+zellij already themed and the menu
-  matches the active theme for free. A fancier *centered* box was tried and
-  reverted — the fish-quoting fragility (command-sub eating newlines, `_` being
-  read-only) wasn't worth it for a prompt that only flashes before you pick. The
-  color survived that revert; only the centering/box/screen-clear were dropped.
+- Menu is colored via `set_color` with ANSI color *names* (green keys, cyan
+  session names, magenta title) — names not hex, so they resolve through the
+  palette kitty+zellij already themed and the menu matches the active theme for
+  free.
+- **Horizontally centered** as a block: one shared left margin (spaces) on every
+  line, so entries stay left-aligned within the block while the block sits in the
+  middle. Margin = `(tput cols - widest_line) / 2`, widths measured on the plain
+  text with `string length` (never the colored strings). Only spaces are used for
+  padding — they survive fish command substitution, unlike newlines. No vertical
+  centering / screen-clear: an earlier full box attempt hit two fish gotchas
+  (command-sub eats newlines; `_` is a read-only var so `for _ in …` fails), so
+  the robust horizontal-only version is what's kept.
 - Verified: fish `-n` syntax, guard no-ops (`$ZELLIJ` set, non-interactive,
   opt-out), and the dispatch table for every input class
   (attach/new/skip/out-of-range/junk).

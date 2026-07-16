@@ -1,0 +1,6 @@
+[language-server.texlab]
+command = "texlab"
+
+[[language]]
+name = "latex"
+language-servers = ["texlab"]
