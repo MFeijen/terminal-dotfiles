@@ -1,0 +1,7 @@
+# espanso default configuration.
+# https://espanso.org/docs/configuration/options/
+#
+# Left intentionally minimal — espanso applies sensible defaults for anything
+# not set here. Its presence is what matters: without a config/default.yml the
+# whole config dir fails to load ("missing config directory") and no matches
+# (including match/latex.yml) are picked up.

@@ -380,8 +380,11 @@ deploy_espanso() {
         run "brew install espanso"
     fi
 
-    log "deploying espanso latex matches"
-    run "mkdir -p '$espanso_dir/match'"
+    log "deploying espanso config + latex matches"
+    # espanso needs a config/default.yml to exist or the whole config dir fails
+    # to load ("missing config directory") — so deploy both, not just match/.
+    run "mkdir -p '$espanso_dir/config' '$espanso_dir/match'"
+    run "ln -sfn '$DOTFILES/espanso/config/default.yml' '$espanso_dir/config/default.yml'"
     run "ln -sfn '$DOTFILES/espanso/match/latex.yml' '$espanso_dir/match/latex.yml'"
 
     if [[ "$ENVKIND" == "mac" ]] && have espanso; then
