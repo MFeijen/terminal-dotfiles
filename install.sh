@@ -360,6 +360,40 @@ patch_zellij() {
 
 if have zellij; then patch_zellij; else log "zellij not installed — theme-system files still deployed"; fi
 
+# --- espanso config (text expander) ------------------------------------------
+# espanso auto-loads every yml under <config>/match/, so we just symlink the
+# repo's latex.yml in. The config dir is platform-specific (macOS keeps it in
+# Application Support, everything else follows XDG). Only installed on mac —
+# espanso needs a desktop session (X11/Wayland), not a headless cluster.
+deploy_espanso() {
+    local espanso_dir
+    if [[ "$ENVKIND" == "mac" ]]; then
+        espanso_dir="$HOME/Library/Application Support/espanso"
+    else
+        espanso_dir="${XDG_CONFIG_HOME:-$HOME/.config}/espanso"
+    fi
+
+    if [[ "$ENVKIND" == "mac" ]] && ! have espanso; then
+        log "espanso: installing (brew tap espanso/espanso)"
+        ensure_brew
+        run "brew tap espanso/espanso"
+        run "brew install espanso"
+    fi
+
+    log "deploying espanso latex matches"
+    run "mkdir -p '$espanso_dir/match'"
+    run "ln -sfn '$DOTFILES/espanso/match/latex.yml' '$espanso_dir/match/latex.yml'"
+
+    if [[ "$ENVKIND" == "mac" ]] && have espanso; then
+        # register the launchd service once (harmless if already registered)
+        run "espanso service register || true"
+        log "espanso: grant Accessibility permission (System Settings > Privacy &"
+        log "  Security > Accessibility), then run 'espanso start' to activate."
+    fi
+}
+
+deploy_espanso
+
 # --- cluster-side bashrc patch ----------------------------------------------
 # Cluster login shells are typically bash. If ~/.bashrc launches fish
 # unconditionally, kitten ssh's non-interactive bootstrap gets replaced by

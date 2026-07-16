@@ -1,0 +1,45 @@
+# LaTeX snippets for espanso.
+#
+# espanso only honours ONE $|$ cursor hint per match ("Multiple hints will be
+# ignored" — espanso docs), so each block places the cursor at its single
+# most-useful field and leaves the other braces empty for you to fill in by
+# hand. This file is auto-loaded because it lives in espanso's match/ dir.
+matches:
+  # figure — cursor lands in \includegraphics{}
+  - trigger: ":fig"
+    replace: |
+      \begin{figure}[htbp]
+          \centering
+          \includegraphics[width=0.8\textwidth]{$|$}
+          \caption{}
+          \label{fig:}
+      \end{figure}
+
+  # table — cursor lands in the tabular column spec
+  - trigger: ":table"
+    replace: |
+      \begin{table}[htbp]
+          \centering
+          \begin{tabular}{$|$}
+              \hline
+               \\
+              \hline
+          \end{tabular}
+          \caption{}
+          \label{tab:}
+      \end{table}
+
+  # equation — cursor lands on the equation body
+  - trigger: ":eq"
+    replace: |
+      \begin{equation}
+          $|$
+          \label{eq:}
+      \end{equation}
+
+  # generic environment — cursor lands in \begin{}; copy the name into \end{}
+  - trigger: ":beg"
+    replace: |
+      \begin{$|$}
+
+      \end{}

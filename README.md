@@ -74,6 +74,19 @@ real file is backed up to `config.toml.bak` first):
 - seeds a managed theme block into `~/.config/zellij/config.kdl` (creating the
   file if needed) by running `theme-apply.py` once
 
+**espanso LaTeX snippets** (`<espanso-config>/match/latex.yml` symlink —
+`~/Library/Application Support/espanso/match/` on macOS, `~/.config/espanso/
+match/` elsewhere):
+- text-expander triggers: `:fig` (figure), `:table`, `:eq` (equation), `:beg`
+  (generic `\begin{}`/`\end{}` block)
+- espanso only supports **one** `$|$` cursor stop per snippet, so each block
+  drops the cursor at its single most-useful field (image path, column spec,
+  equation body, env name) and leaves the rest blank
+- macOS only: `install.sh` `brew tap espanso/espanso && brew install espanso`
+  if missing, then `espanso service register`. You must grant Accessibility
+  permission (System Settings → Privacy & Security → Accessibility) and run
+  `espanso start` once — that step can't be automated
+
 ## Theme system
 
 Run `theme` in fish. Fuzzy-pick from ~170 helix themes (system + your custom
@@ -111,6 +124,9 @@ locally-relevant theme (its UI-chrome colors don't need to match your laptop).
 - zellij: edit `~/.config/zellij/config.kdl`, delete the `theme-system` block
   (everything between the `>>> theme-system` and `<<< theme-system` markers).
 - Fish: `rm ~/.config/fish/conf.d/env-setup.fish`.
+- espanso: `rm "$HOME/Library/Application Support/espanso/match/latex.yml"` (or
+  the `~/.config/espanso/...` path off mac). Uninstall entirely with
+  `espanso service unregister && brew uninstall espanso`.
 - Helix: pick any theme normally via `:theme` — `theme-apply.py` no longer
   rewrites `config.toml` once you stop calling it. To drop the tracked config
   entirely: `rm ~/.config/helix/config.toml` and restore
