@@ -8,7 +8,7 @@ matches:
   # figure — cursor lands in \includegraphics{}
   - trigger: ":fig"
     replace: |
-      \begin{figure}[htbp]
+      \begin{figure}[H]
           \centering
           \includegraphics[width=0.8\textwidth]{$|$}
           \caption{}
@@ -18,7 +18,7 @@ matches:
   # table — cursor lands in the tabular column spec
   - trigger: ":table"
     replace: |
-      \begin{table}[htbp]
+      \begin{table}[H]
           \centering
           \begin{tabular}{$|$}
               \hline

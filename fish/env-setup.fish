@@ -102,10 +102,11 @@ function y
     command rm -f -- "$tmp"
 end
 
-# zellij session prompt — loaded last so every alias/function above already
-# exists before it may drop you into a session. Sourced (not a picker function)
-# because it must run at startup, not on demand.
-set -l zellij_startup $dotfiles_root/zellij/zellij-startup.fish
-if test -f $zellij_startup
-    source $zellij_startup
-end
+# zellij autostart is disabled. To start zellij automatically on terminal
+# launch again, restore the source block below (the script is still at
+# zellij/zellij-startup.fish):
+#
+#     set -l zellij_startup $dotfiles_root/zellij/zellij-startup.fish
+#     if test -f $zellij_startup
+#         source $zellij_startup
+#     end
