@@ -1,4 +1,4 @@
-theme = "everforest_light"
+theme = "darcula"
 
 [editor.cursor-shape]
 normal = "block"

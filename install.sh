@@ -195,6 +195,12 @@ setup_mac_essentials() {
     else
         log "fish: already installed ($(command -v fish))"
     fi
+    if ! have aerospace; then
+        log "aerospace: installing (brew cask)"
+        install_via_brew nikitabobko/tap/aerospace 1
+    else
+        log "aerospace: already installed ($(command -v aerospace))"
+    fi
     if ! have ghostty; then
         log "ghostty: installing (brew cask)"
         install_via_brew ghostty 1
@@ -307,6 +313,20 @@ if [[ -e "$CONFIG/helix/config.toml" && ! -L "$CONFIG/helix/config.toml" ]]; the
 fi
 run "ln -sfn '$DOTFILES/helix/config.toml' '$CONFIG/helix/config.toml'"
 
+# --- aerospace config (mac only) ----------------------------------------------
+# AeroSpace reads only ~/.aerospace.toml (no XDG path, no include mechanism),
+# so symlink the repo copy in. Back up a pre-existing real file once.
+deploy_aerospace() {
+    log "deploying aerospace config"
+    if [[ -e "$HOME/.aerospace.toml" && ! -L "$HOME/.aerospace.toml" ]]; then
+        log "aerospace: existing .aerospace.toml found — backing up to .aerospace.toml.bak"
+        run "mv '$HOME/.aerospace.toml' '$HOME/.aerospace.toml.bak'"
+    fi
+    run "ln -sfn '$DOTFILES/aerospace/aerospace.toml' '$HOME/.aerospace.toml'"
+}
+
+if [[ "$ENVKIND" == "mac" ]]; then deploy_aerospace; fi
+
 # --- starship config ---------------------------------------------------------
 # Only set the default on fresh installs — never stomp a user's chosen variant.
 if [[ ! -e "$CONFIG/starship.toml" ]]; then
@@ -368,43 +388,6 @@ patch_zellij() {
 }
 
 if have zellij; then patch_zellij; else log "zellij not installed — theme-system files still deployed"; fi
-
-# --- espanso config (text expander) ------------------------------------------
-# espanso auto-loads every yml under <config>/match/, so we just symlink the
-# repo's latex.yml in. The config dir is platform-specific (macOS keeps it in
-# Application Support, everything else follows XDG). Only installed on mac —
-# espanso needs a desktop session (X11/Wayland), not a headless cluster.
-deploy_espanso() {
-    local espanso_dir
-    if [[ "$ENVKIND" == "mac" ]]; then
-        espanso_dir="$HOME/Library/Application Support/espanso"
-    else
-        espanso_dir="${XDG_CONFIG_HOME:-$HOME/.config}/espanso"
-    fi
-
-    if [[ "$ENVKIND" == "mac" ]] && ! have espanso; then
-        log "espanso: installing (brew tap espanso/espanso)"
-        ensure_brew
-        run "brew tap espanso/espanso"
-        run "brew install espanso"
-    fi
-
-    log "deploying espanso config + latex matches"
-    # espanso needs a config/default.yml to exist or the whole config dir fails
-    # to load ("missing config directory") — so deploy both, not just match/.
-    run "mkdir -p '$espanso_dir/config' '$espanso_dir/match'"
-    run "ln -sfn '$DOTFILES/espanso/config/default.yml' '$espanso_dir/config/default.yml'"
-    run "ln -sfn '$DOTFILES/espanso/match/latex.yml' '$espanso_dir/match/latex.yml'"
-
-    if [[ "$ENVKIND" == "mac" ]] && have espanso; then
-        # register the launchd service once (harmless if already registered)
-        run "espanso service register || true"
-        log "espanso: grant Accessibility permission (System Settings > Privacy &"
-        log "  Security > Accessibility), then run 'espanso start' to activate."
-    fi
-}
-
-deploy_espanso
 
 # --- cluster-side bashrc patch ----------------------------------------------
 # Cluster login shells are typically bash. If ~/.bashrc launches fish

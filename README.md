@@ -58,7 +58,9 @@ real file is backed up to `config.toml.bak` first):
 - `ls`/`ll`/`la`/`tree` → `eza`
 - `cat` → `bat`
 - `y` — yazi wrapper that `cd`s into the exit directory
-- `theme` — the theme picker
+- `theme` — the theme picker (`--local` binds it to the current folder,
+  `--ssh <host>` to a host)
+- `ssh` — wrapper that paints the terminal with the host's bound theme
 - `fish_greeting` — runs `fastfetch` if installed
 - **zellij session prompt** — on opening an interactive terminal, offers to
   start a new zellij session, attach to an existing/exited one, or drop into a
@@ -75,19 +77,6 @@ real file is backed up to `config.toml.bak` first):
 **zellij patch** (skipped if zellij absent):
 - seeds a managed theme block into `~/.config/zellij/config.kdl` (creating the
   file if needed) by running `theme-apply.py` once
-
-**espanso LaTeX snippets** (`<espanso-config>/match/latex.yml` symlink —
-`~/Library/Application Support/espanso/match/` on macOS, `~/.config/espanso/
-match/` elsewhere):
-- text-expander triggers: `:fig` (figure), `:table`, `:eq` (equation), `:beg`
-  (generic `\begin{}`/`\end{}` block)
-- espanso only supports **one** `$|$` cursor stop per snippet, so each block
-  drops the cursor at its single most-useful field (image path, column spec,
-  equation body, env name) and leaves the rest blank
-- macOS only: `install.sh` `brew tap espanso/espanso && brew install espanso`
-  if missing, then `espanso service register`. You must grant Accessibility
-  permission (System Settings → Privacy & Security → Accessibility) and run
-  `espanso start` once — that step can't be automated
 
 ## Theme system
 
@@ -116,6 +105,67 @@ live-reloads on write — no reload signal needed.
 
 Yazi and Claude Code inherit from ghostty's palette — no code needed there.
 
+### Folder-local themes
+
+`theme` sets the theme everywhere. `theme --local` binds the **current
+directory** to a theme instead — only the terminal you ran it in repaints, and
+only while you're inside that directory tree.
+
+```fish
+theme                # pick a global theme (all terminals, as before)
+theme --local        # pick a theme for $PWD (this terminal only)
+theme --unbind       # drop $PWD's binding
+```
+
+Bindings live in `~/.config/theme-system/local.toml` as `"<path>" = "<theme>"`
+— nothing is written into your repos, so there's nothing to gitignore.
+Subdirectories inherit; the nearest bound ancestor wins, so binding `~/work`
+themes every project under it and binding `~/work/api` overrides it there.
+
+A fish hook on `$PWD` reconciles the terminal on every `cd`: OSC escapes are
+per-surface, so a local theme repaints just that window and leaves your other
+terminals — and every global config file — untouched. The global theme in
+`~/.config/helix/config.toml` stays the source of truth for unbound
+directories.
+
+Helix has no per-project theme and only reloads the config path it was started
+with, so a local theme reaches it as a whole generated config in
+`~/.cache/theme-system/helix-<theme>.toml`; a `hx` wrapper passes it with `-c`.
+It's regenerated on every sync, so your keymaps and editor settings are never
+stranded in a stale copy. An explicit `-c`/`--config` of your own wins.
+
+Two things this deliberately doesn't do: zellij stays on the global theme (its
+theme is one watched file, so it can't differ per window), and changing the
+*global* theme repaints locally-bound terminals too — they snap back on their
+next `cd`. The `cd` hook costs nothing until you bind your first folder; after
+that it's ~50ms per directory change.
+
+### Per-host themes
+
+`theme --ssh <host>` binds a **host** to a theme, so `ssh prod` paints that
+window red and `ssh laptop` doesn't — a glance tells you where you're typing.
+
+```fish
+theme --ssh myserver     # pick a theme for that host
+ssh myserver             # terminal repaints, restores on logout
+theme --unbind myserver  # drop the binding
+```
+
+Bindings share `~/.config/theme-system/local.toml` under `ssh:` keys. The host
+is canonicalized through `ssh -G`, so `~/.ssh/config` aliases and flags like
+`-p` resolve to the same key however you type the connection.
+
+Ghostty's shell integration defines its own `ssh` wrapper (`ssh-env`,
+`ssh-terminfo`) from a *vendor* conf.d — sourced after your own, from a
+`fish_prompt` handler, so it wins any wrapper defined at source time. Ours
+re-wraps on each prompt and before each command, keeping ghostty's as the inner
+call, so its terminfo/env work still happens.
+
+Nothing is installed on the remote: the `ssh` wrapper repaints the *local*
+surface before connecting, and OSC colors already cross the connection (see
+below). On exit the terminal is restored to whatever it should show locally,
+which also repairs a palette the remote session changed itself.
+
 ## Cluster caveat
 
 The theme picker's ghostty/zellij config steps only run where those tools are
@@ -132,9 +182,6 @@ locally-relevant theme (its UI-chrome colors don't need to match your laptop).
 - zellij: edit `~/.config/zellij/config.kdl`, delete the `theme-system` block
   (everything between the `>>> theme-system` and `<<< theme-system` markers).
 - Fish: `rm ~/.config/fish/conf.d/env-setup.fish`.
-- espanso: `rm "$HOME/Library/Application Support/espanso/match/latex.yml"` (or
-  the `~/.config/espanso/...` path off mac). Uninstall entirely with
-  `espanso service unregister && brew uninstall espanso`.
 - Helix: pick any theme normally via `:theme` — `theme-apply.py` no longer
   rewrites `config.toml` once you stop calling it. To drop the tracked config
   entirely: `rm ~/.config/helix/config.toml` and restore
