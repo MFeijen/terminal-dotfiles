@@ -7,7 +7,7 @@ Works on Arch (with root), macOS, and no-root clusters (RHEL etc.).
 
 ```sh
 git clone <this-repo> ~/.dotfiles
-~/.dotfiles/install.sh                          # tools + fish config + kitty patch
+~/.dotfiles/install.sh                          # tools + fish config + ghostty patch
 ~/.dotfiles/install.sh --with-helix             # also build helix from source
 ~/.dotfiles/install.sh --with-fish --with-helix # full cluster setup (no root)
 ```
@@ -23,17 +23,17 @@ Idempotent — safe to re-run.
 
 Detected automatically (`uname -s == Darwin`). On a blank machine the script:
 - bootstraps Homebrew if missing
-- installs python3, fish, and kitty (cask) via `brew`, then everything in the
+- installs python3, fish, and ghostty (cask) via `brew`, then everything in the
   tools list below via `brew install <formula>` (same package names as Arch)
-- creates `~/.config/kitty/kitty.conf` if it doesn't exist yet, so the theme
+- creates `~/.config/ghostty/config` if it doesn't exist yet, so the theme
   include still gets patched in
 - runs `chsh -s $(which fish)` to make fish your login shell (adds it to
   `/etc/shells` first if needed) — this will prompt for your password
 - `--with-helix` installs helix via `brew` instead of building from source
 
-Not automated: a Nerd Font. Starship/eza/fastfetch icons need one for kitty to
-render correctly — `brew install --cask font-jetbrains-mono-nerd-font` and set
-it in kitty's `font_family`.
+Not automated: a Nerd Font. Starship/eza/fastfetch icons need one for ghostty
+to render correctly — `brew install --cask font-jetbrains-mono-nerd-font` and
+set it in ghostty's `font-family`.
 
 ## What it installs
 
@@ -65,10 +65,12 @@ real file is backed up to `config.toml.bak` first):
   plain shell. Skipped when already inside zellij or when `ZELLIJ_NO_AUTOSTART`
   is set. Enter = new, a listed number = attach that session, `s` = plain shell.
 
-**Kitty patch** (local only, skipped if kitty absent):
-- prepends `include ~/.config/kitty/theme-current.conf`
-- adds `allow_remote_control socket-only` + `listen_on`
-- removes any quickshell-generated theme include
+**Ghostty patch** (local only, skipped if ghostty absent):
+- appends `config-file = ?theme-current.conf` (ghostty loads a `config-file`
+  *after* the file declaring it, so the theme wins wherever the line sits)
+- on a fresh config only, seeds `macos-option-as-alt` and
+  `shell-integration-features = ssh-env,ssh-terminfo` (remote terminfo install)
+- no remote-control setup: the live repaint uses OSC escapes, not a socket
 
 **zellij patch** (skipped if zellij absent):
 - seeds a managed theme block into `~/.config/zellij/config.kdl` (creating the
@@ -90,37 +92,43 @@ match/` elsewhere):
 ## Theme system
 
 Run `theme` in fish. Fuzzy-pick from ~170 helix themes (system + your custom
-themes in `~/helix-ide/config/helix/themes/`). Live preview repaints kitty +
+themes in `~/helix-ide/config/helix/themes/`). Live preview repaints ghostty +
 all helix instances as you scroll. Enter keeps, Esc restores.
 
 Behind the scenes: `theme-apply.py` derives an ANSI palette from the helix
-theme, writes `~/.config/kitty/theme-current.conf`, updates `theme = "..."` in
-`~/.config/helix/config.toml`, calls `kitty @ set-colors --all --configured`,
-and sends `SIGUSR1` to all `hx` processes (buffer-safe reload).
+theme, writes `~/.config/ghostty/theme-current.conf`, updates `theme = "..."` in
+`~/.config/helix/config.toml`, writes the palette to `/dev/tty` as OSC 4/10/11/
+12/17/19 escapes, and sends `SIGUSR1` to all `hx` processes (buffer-safe reload).
+
+The OSC escapes are why there's no reload step: ghostty has no remote-control
+CLI (kitty's `kitty @ set-colors`) and its only config-reload trigger is the
+`super+shift+,` keybind, so the palette is pushed to the terminal directly.
+That repaints the running window instantly. `theme-current.conf` is what makes
+it *stick* — but ghostty reads it at app start, so a **newly opened window
+keeps the old palette until you reload** (`super+shift+,`) or restart ghostty.
 
 It also rewrites a managed `themes { theme-current { ... } }` block in
 `~/.config/zellij/config.kdl` — tab bar, status line, and pane frames, derived
-from the same palette. zellij has no ANSI-16 palette of its own (kitty supplies
-that underneath it), so this only covers zellij's own UI chrome, not syntax
-colors. The theme is inline in the main config, which zellij watches and
-live-reloads on write — no reload signal needed, unlike `kitty @ set-colors`.
+from the same palette. zellij has no ANSI-16 palette of its own (ghostty
+supplies that underneath it), so this only covers zellij's own UI chrome, not
+syntax colors. The theme is inline in the main config, which zellij watches and
+live-reloads on write — no reload signal needed.
 
-Yazi and Claude Code inherit from kitty's palette — no code needed there.
+Yazi and Claude Code inherit from ghostty's palette — no code needed there.
 
 ## Cluster caveat
 
-The theme picker's kitty/zellij repaint steps only run where those tools are
+The theme picker's ghostty/zellij config steps only run where those tools are
 installed. On the cluster, install grabs the tools and the fish env, skips
 whichever patch doesn't apply. Terminal colors on the cluster come from your
-*local* kitty via SSH — theme changes on your laptop propagate to your
+*local* ghostty via SSH — theme changes on your laptop propagate to your
 remote helix for free. zellij, if present on the cluster, gets its own
 locally-relevant theme (its UI-chrome colors don't need to match your laptop).
 
 ## Reverting
 
-- Kitty: edit `~/.config/kitty/kitty.conf`, remove the `include
-  theme-current.conf` line and the `allow_remote_control` line. Optionally
-  re-add quickshell's include.
+- Ghostty: edit `~/.config/ghostty/config`, remove the `config-file =
+  ?theme-current.conf` line, then reload with `super+shift+,`.
 - zellij: edit `~/.config/zellij/config.kdl`, delete the `theme-system` block
   (everything between the `>>> theme-system` and `<<< theme-system` markers).
 - Fish: `rm ~/.config/fish/conf.d/env-setup.fish`.

@@ -1,4 +1,4 @@
-function theme --description "Fuzzy-pick a helix theme; syncs kitty + helix live"
+function theme --description "Fuzzy-pick a helix theme; syncs ghostty + helix live"
     set -l script_dir (dirname (status -f))
     set -l apply "$script_dir/theme-apply.py"
 

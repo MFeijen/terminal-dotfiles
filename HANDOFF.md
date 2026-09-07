@@ -7,7 +7,8 @@ Written 2026-07-08.
 
 ## Goal
 
-One consistent theme across kitty, helix, yazi, and Claude Code — driven by
+One consistent theme across the terminal (kitty originally, ghostty since
+2026-08-31 — see the migration section at the end), helix, yazi, and Claude Code — driven by
 picking a helix theme via fuzzy picker. Plus a portable "install my CLI env"
 script that works on Arch (with root) and no-root clusters (RHEL etc.).
 
@@ -43,7 +44,7 @@ Other locked choices:
 ├── README.md                          # user-facing docs
 ├── HANDOFF.md                         # this file
 ├── theme-system/
-│   ├── theme-apply.py                 # theme parse → kitty/helix sync
+│   ├── theme-apply.py                 # theme parse → ghostty/zellij/helix sync
 │   └── theme-picker.fish              # fish function `theme` (fzf UI)
 └── fish/
     └── env-setup.fish                 # dropped into ~/.config/fish/conf.d/
@@ -116,7 +117,7 @@ Modes:
 - Install on cluster (RHEL, no root) — untested; prebuilt-binary path is untested
 - `--with-helix` flag — untested
 
-## Open issue (as of last message)
+## Open issue (as of last message) — RESOLVED, and moot since the ghostty migration
 
 User reported "theme selector isn't doing anything" after running `install.sh`.
 
@@ -135,19 +136,19 @@ Waiting for user to report which of a/b/c fail.
 
 ## Debugging cheat-sheet
 
-- **Kitty not repainting:** check `kitty @ ls` works; check `allow_remote_control` in effect via `kitty --debug-config | grep remote`; check `theme-current.conf` exists and is valid
+- **Ghostty not repainting:** the live swap is OSC escapes on `/dev/tty`, so check you're in a real tty (`test -t 1`) — under a pipe or a CI runner it silently no-ops by design. Check the config is wired: `ghostty +show-config | grep background` should show the theme's color, and `ghostty +validate-config` should exit 0. Remember a **newly opened window** keeps the old palette until `super+shift+,` — that's expected, not a bug (ghostty reads config at app start)
 - **Helix not repainting:** check `hx` is actually running; check config.toml was updated (`cat ~/.config/helix/config.toml`); manually send `pkill -SIGUSR1 -x hx`
 - **Theme function not found:** check symlink `ls -l ~/.config/fish/conf.d/env-setup.fish`; re-source with `source ~/.config/fish/conf.d/env-setup.fish`; restart fish
 - **Custom themes missing from picker:** check `~/helix-ide/config/helix/themes/` exists; check `.toml` extension; run `ls` on each theme_dir in the fish function
 - **Palette looks weird for a theme:** the ANSI heuristic mis-mapped for that theme. Options: hand-tune `pick()` calls in `derive_palette()` for specific palette-name conventions, or add a per-theme override table
-- **Reverting quickshell control:** revert the two changes at top of `~/.config/kitty/kitty.conf` (the `include` and the `allow_remote_control`/`listen_on` lines). Re-add `include ~/.local/state/quickshell/user/generated/terminal/kitty-theme.conf` if desired
+- **Backing the theme system out of ghostty:** delete the `config-file = ?theme-current.conf` line from `~/.config/ghostty/config` and reload (`super+shift+,`)
 
 ## Things intentionally NOT built
 
-- Yazi theme file — yazi inherits terminal palette from kitty
-- Claude Code theme — same, inherits from kitty
+- Yazi theme file — yazi inherits the terminal palette (kitty then, ghostty now)
+- Claude Code theme — same, inherits from the terminal
 - Helix keybind for `theme` — user picked fish alias only
-- Kitty keybind — user picked fish alias only
+- Terminal keybind — user picked fish alias only
 - Per-theme hand-tuning of ANSI mapping — accepted "best effort" fidelity (Q3)
 - Dotfiles for anything beyond fish conf.d — configs stay per-machine
 - fzf.fish plugin, ctrl+r history search, etc. — user asked but then said "just build the selecter" and moved on
@@ -354,6 +355,84 @@ sourcing (before the first prompt) so a choice drops you straight into a session
 - Verified: fish `-n` syntax, guard no-ops (`$ZELLIJ` set, non-interactive,
   opt-out), and the dispatch table for every input class
   (attach/new/skip/out-of-range/junk).
+
+## Migrated kitty → ghostty (2026-08-31)
+
+Full replacement, not dual-support: kitty is gone from `install.sh` and
+`theme-apply.py`. (`~/.config/kitty/` is left on disk untouched — nothing was
+deleted from the machine, so falling back is just relaunching kitty.) zellij was
+deliberately left in scope-untouched; ghostty's native tabs/splits arguably
+replace it, but that's a separate decision.
+
+**The one real architectural change — how the live repaint is delivered.**
+Everything else was renaming. kitty had a remote-control socket, so
+`reload_kitty()` shelled out to `kitty @ set-colors --all --configured`. Ghostty
+has no remote-control CLI at all; its only config-reload trigger is the
+`super+shift+,` keybind, which nothing external can fire. Verified against the
+installed binary, not assumed: `ghostty +list-actions` has `reload_config` only
+as a *keybind* action, and `ghostty --help` lists no equivalent of `kitty @`.
+
+So `set_colors_osc()` replaces `reload_kitty()` and pushes the palette to the
+terminal as standard OSC escapes instead — OSC 4 (ANSI 16), 10/11/12 (fg/bg/
+cursor), 17/19 (selection bg/fg). Confirmed supported: the binary's config docs
+state "Ghostty currently supports OSC 10 (foreground), OSC 11 (background), and
+OSC 4 (256 color palette)". This is strictly better than the socket in three
+ways — instant (no reload round-trip), no emulator-side setup to enable
+(`allow_remote_control`/`listen_on` are gone from the install patch), and it
+works verbatim over SSH.
+
+Two consequences worth knowing:
+- **Written to `/dev/tty`, never stdout.** During `theme`'s fzf preview, stdout
+  is a pipe fzf renders into — escapes sent there would print as literal garbage
+  in the preview pane instead of reaching the terminal. Wrapped in
+  `except OSError: pass` so a missing controlling terminal is a silent no-op and
+  the config write still lands.
+- **Known ceiling: new windows lag.** OSC repaints the *running* surface.
+  `theme-current.conf` is what persists the choice, but ghostty reads config at
+  app start — so a window opened after a theme change shows the old palette
+  until `super+shift+,` or an app restart. kitty's `--configured` flag updated
+  both at once; there is no ghostty equivalent. Accepted rather than worked
+  around (the alternative is synthesizing the keybind via AppleScript, which
+  needs Accessibility permission for a cosmetic edge case).
+
+Mechanical parts:
+- `write_kitty_conf()` → `write_ghostty_conf()`. Ghostty spells the ANSI 16 as
+  repeated `palette = <n>=<hex>` lines rather than kitty's one `colorN` key
+  each, and uses `cursor-color`/`selection-background`/`selection-foreground`.
+  The internal `derive_palette()` dict is unchanged and still the neutral
+  intermediate — `derive_zellij_theme()` and `print_swatch()` consume it as
+  before, so only the writer was swapped.
+- `patch_kitty()` → `patch_ghostty()`, and it got *simpler*: `config-file` is
+  applied **after** the file that declares it, so appending is enough — no
+  prepend-via-tmpfile dance like kitty's `include` needed. The quickshell-include
+  strip went away with it (that was Arch/kitty-specific and long dead here).
+- Fresh-config seed only (mirrors the existing `starship.toml` "never stomp an
+  existing file" pattern): `macos-option-as-alt = true`, carried over from the
+  old `kitty.conf`, plus `shell-integration-features = ssh-env,ssh-terminfo`.
+- **`shell-integration-features` is the native replacement for the old
+  `kitten ssh` wrapper** that `env-setup.fish` had commented out. Those two flags
+  are OFF by default (`no-ssh-env,no-ssh-terminfo`) — checked, not assumed. They
+  install the `xterm-ghostty` terminfo entry on the remote and fall back to
+  `xterm-256color` when the host has no `tic`, which is exactly what the kitten
+  wrapper did, minus its fatal flaw (kitten refused outright on non-tty stdin,
+  breaking scripts and VS Code Remote-SSH probes). Also verified the flag set
+  *merges* rather than replaces — resolved value keeps `cursor,title,path`.
+  The dead commented-out fish block was deleted.
+
+**Verified:**
+- Generated config for 4 themes (catppuccin_mocha, gruvbox_dark_soft,
+  github_light, rose_pine_moon); asserted 21 settings each, 16 of them `palette`.
+- `ghostty +validate-config` exits 0 against the real `~/.config/ghostty/config`
+  + its `config-file`d theme.
+- `ghostty +show-config` confirms the theme's colors override ghostty's defaults
+  (i.e. the `config-file` precedence works as documented), and that
+  `shell-integration-features`/`macos-option-as-alt` resolve as intended.
+- Real cutover run: `~/.config/ghostty/config` seeded, `theme-apply.py
+  catppuccin_frappe` (the already-active theme, so a deliberate colour no-op).
+
+**Not verified:** the live OSC repaint during an interactive `theme` fzf session
+— that needs a real tty, which the agent shell isn't. Run `theme` and confirm
+colors move as you scroll.
 
 ## Style notes for future edits
 

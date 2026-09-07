@@ -29,7 +29,7 @@ Usage: install.sh [--with-helix] [--with-fish] [--cluster] [--force] [--dry-run]
   --with-helix   Also build helix from source (via rustup + cargo)
   --with-fish    Also build fish shell from source (via rustup + cmake)
   --cluster      Apply cluster-side fixes (guard bare 'fish' in ~/.bashrc so
-                 kitten ssh's non-interactive bootstrap can complete cleanly)
+                 ssh's non-interactive bootstrap can complete cleanly)
   --force        Reinstall tools even if already present
   --dry-run      Show what would happen, don't do it
 EOF
@@ -179,7 +179,7 @@ install_tool() {
 }
 
 # --- mac-only bootstrap -------------------------------------------------------
-# fish, kitty, and python3 (needed by theme-apply.py) aren't in the generic
+# fish, ghostty, and python3 (needed by theme-apply.py) aren't in the generic
 # install_tool list above since they need cask/shell-change/no-cargo-fallback
 # handling that doesn't apply to the other envs.
 setup_mac_essentials() {
@@ -195,11 +195,11 @@ setup_mac_essentials() {
     else
         log "fish: already installed ($(command -v fish))"
     fi
-    if ! have kitty; then
-        log "kitty: installing (brew cask)"
-        install_via_brew kitty 1
+    if ! have ghostty; then
+        log "ghostty: installing (brew cask)"
+        install_via_brew ghostty 1
     else
-        log "kitty: already installed ($(command -v kitty))"
+        log "ghostty: already installed ($(command -v ghostty))"
     fi
 }
 
@@ -316,32 +316,41 @@ else
     log "starship.toml: already present — leaving as-is (use \`starship-style\` to switch)"
 fi
 
-# --- kitty patch (local only) ------------------------------------------------
-patch_kitty() {
-    local conf="$CONFIG/kitty/kitty.conf"
+# --- ghostty patch (local only) ----------------------------------------------
+# Only the theme include is managed here; everything else in the config is
+# yours. Unlike kitty there's no remote-control setup to do — theme-apply.py
+# repaints the live window with OSC escapes instead of a control socket, so
+# nothing needs enabling at the emulator end.
+patch_ghostty() {
+    local conf="$CONFIG/ghostty/config"
     if [[ ! -f "$conf" ]]; then
-        log "kitty: no config found — creating one"
-        run "mkdir -p '$CONFIG/kitty' && touch '$conf'"
+        log "ghostty: no config found — creating one"
+        # Seeded only on fresh create, never on an existing config:
+        #   macos-option-as-alt      carried over from the old kitty.conf
+        #   shell-integration-features  ssh-env/ssh-terminfo are OFF by default;
+        #     they install the xterm-ghostty entry on remotes (this is the
+        #     native replacement for the old `kitten ssh` wrapper). The flag set
+        #     merges, so cursor/title/path keep their defaults.
+        # On macOS the shell comes from the login shell (set to fish further
+        # down), so no `command` line is needed.
+        run "mkdir -p '$CONFIG/ghostty' && printf 'macos-option-as-alt = true\nshell-integration-features = ssh-env,ssh-terminfo\n' > '$conf'"
     fi
     if grep -q 'theme-current.conf' "$conf"; then
-        log "kitty: theme-current.conf already included"
+        log "ghostty: theme-current.conf already included"
     else
-        log "kitty: including theme-current.conf"
-        # Portable in-place edit (avoids `sed -i` flag differences between
-        # GNU sed and macOS's BSD sed): rebuild the file via a temp copy.
-        run "grep -v 'quickshell.*kitty-theme.conf' '$conf' > '$conf.tmp' || true; { echo 'include ~/.config/kitty/theme-current.conf'; cat '$conf.tmp'; } > '$conf'; rm -f '$conf.tmp'"
-    fi
-    if ! grep -q '^allow_remote_control' "$conf"; then
-        log "kitty: enabling remote control"
-        run "printf '\nallow_remote_control socket-only\nlisten_on unix:/tmp/kitty-%%i\n' >> '$conf'"
+        log "ghostty: including theme-current.conf"
+        # Appending is enough: ghostty applies a `config-file` *after* the file
+        # that declares it, so the theme wins regardless of position — no
+        # prepend dance like kitty's `include` needed. `?` = ignore if absent.
+        run "printf '\nconfig-file = ?theme-current.conf\n' >> '$conf'"
     fi
     # seed a theme if the file doesn't exist yet
-    if [[ ! -f "$CONFIG/kitty/theme-current.conf" ]]; then
+    if [[ ! -f "$CONFIG/ghostty/theme-current.conf" ]]; then
         run "python3 '$DOTFILES/theme-system/theme-apply.py' catppuccin_mocha"
     fi
 }
 
-if have kitty; then patch_kitty; else log "kitty not installed — theme-system files still deployed"; fi
+if have ghostty; then patch_ghostty; else log "ghostty not installed — theme-system files still deployed"; fi
 
 # --- zellij patch ------------------------------------------------------------
 # zellij has no KDL include mechanism and only live-reloads themes defined
@@ -399,9 +408,10 @@ deploy_espanso
 
 # --- cluster-side bashrc patch ----------------------------------------------
 # Cluster login shells are typically bash. If ~/.bashrc launches fish
-# unconditionally, kitten ssh's non-interactive bootstrap gets replaced by
-# fish mid-transfer and kitty's shell-integration payload leaks as raw
-# commands. Guard the launch with an interactive-shell check and use exec
+# unconditionally, the terminal's non-interactive ssh bootstrap (terminfo
+# install, TERM fixup) gets replaced by fish mid-transfer and its
+# shell-integration payload leaks as raw commands. Guard the launch with an
+# interactive-shell check and use exec
 # so bash doesn't sit around waiting on a nested fish.
 patch_bashrc_for_fish() {
     local rc="$HOME/.bashrc"
@@ -445,5 +455,5 @@ setup_fish_shell_mac() {
 
 if [[ "$ENVKIND" == "mac" ]]; then setup_fish_shell_mac; fi
 
-log "done. restart kitty (or new tab) to pick up remote-control changes."
+log "done. restart ghostty (or hit super+shift+, to reload) to pick up config changes."
 log "run \`theme\` from fish to pick a theme."

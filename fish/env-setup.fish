@@ -3,7 +3,7 @@
 
 # Homebrew (mac): bash/zsh get /opt/homebrew/bin via macOS's /etc/paths.d +
 # path_helper, but fish never reads that — without this, brew-installed tools
-# (including kitty, starship, fzf...) vanish once fish is the login shell.
+# (including ghostty, starship, fzf...) vanish once fish is the login shell.
 if test -x /opt/homebrew/bin/brew
     /opt/homebrew/bin/brew shellenv fish | source
 else if test -x /usr/local/bin/brew
@@ -51,21 +51,13 @@ if type -q bat
     set -gx BAT_THEME base16
 end
 
-# Route ssh through kitten so remote sessions get correct terminfo
-# (avoids TERM=xterm-kitty leaking to hosts without the entry).
-# kitten ssh refuses outright when stdin isn't a real tty ("meant for
-# interactive use only"), which breaks non-interactive callers (scripts,
-# command substitution, VS Code Remote-SSH probes, `ssh host cmd < file`)
-# — fall back to plain ssh for those instead of erroring.
-# if type -q kitten
-#     function ssh --description 'kitten ssh, falling back to plain ssh when non-interactive'
-#         if isatty stdin
-#             kitten ssh $argv
-#         else
-#             command ssh $argv
-#         end
-#     end
-# end
+# No ssh wrapper needed here — ghostty handles remote terminfo in *config*
+# rather than by wrapping the ssh binary. install.sh seeds
+# `shell-integration-features = ssh-env,ssh-terminfo`, which installs the
+# xterm-ghostty entry on the remote (falling back to xterm-256color when the
+# host has no `tic`) and propagates COLORTERM. That's what the old
+# `kitten ssh` function did, minus its fatal flaw: kitten refused outright on
+# a non-tty stdin, breaking scripts and VS Code Remote-SSH probes.
 
 # Greeting — fastfetch if installed, silent under SSH (remote binary may be
 # ABI-incompatible, e.g. old glibc on HPC login nodes).

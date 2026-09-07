@@ -1,9 +1,15 @@
-theme = "catppuccin_frappe"
+theme = "everforest_light"
 
 [editor.cursor-shape]
 normal = "block"
 insert = "bar"
 select = "underline"
+
+[editor.soft-wrap]
+enable = true
+max-wrap = 25          # max characters wrapped at the end of the line
+max-indent-retain = 40 # don't indent-wrap beyond this level
+wrap-indicator = "↪ "  # shown at start of wrapped lines, "" to disable
 
 [keys.normal]
 # space+e: open yazi in the current file's directory; the file picked in
