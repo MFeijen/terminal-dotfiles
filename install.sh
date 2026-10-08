@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # install.sh — set up my CLI env on a fresh machine.
-# Idempotent. Safe to re-run. Detects arch+root, mac, fedora, rhel+noroot, other.
+# Idempotent. Safe to re-run. Detects arch+root vs fedora+root vs mac vs
+# rhel+noroot vs other.
 
 set -euo pipefail
 
@@ -58,10 +59,13 @@ detect_env() {
     if [[ "$(uname -s)" == "Darwin" ]]; then echo "mac"; return; fi
     if have pacman && sudo -v -n 2>/dev/null; then echo "arch-root"; return; fi
     if have pacman; then echo "arch-noroot"; return; fi
-    # Before the redhat-release check: Fedora has that file too. Matching ID=
-    # (not ID_LIKE=) matters — RHEL's ID_LIKE is "fedora", and clusters must
-    # stay on the no-root path. Assumes sudo, like mac; a desktop install.
-    if grep -qs '^ID=fedora' /etc/os-release; then echo "fedora"; return; fi
+    # Fedora (incl. Asahi Remix) also has /etc/redhat-release, so it must be
+    # caught before the rhel check. Its default sudoers lets wheel sudo with a
+    # password, so wheel membership counts — sudo prompts once on first use.
+    if [[ -f /etc/fedora-release ]] && have dnf \
+        && { sudo -v -n 2>/dev/null || id -nG | grep -qw wheel; }; then
+        echo "fedora-root"; return
+    fi
     if [[ -f /etc/redhat-release ]]; then echo "rhel-noroot"; return; fi
     if have apt-get && sudo -v -n 2>/dev/null; then echo "debian-root"; return; fi
     echo "generic"
@@ -70,10 +74,21 @@ detect_env() {
 ENVKIND=$(detect_env)
 log "detected environment: $ENVKIND"
 
+# Release assets name the CPU differently per project (x86_64/amd64,
+# aarch64/arm64), so asset patterns below say {arch} and get this alternation.
+case "$(uname -m)" in
+    x86_64|amd64)  ARCH_RE='(x86_64|amd64)' ;;
+    aarch64|arm64) ARCH_RE='(aarch64|arm64)' ;;
+    *)             ARCH_RE="$(uname -m)" ;;
+esac
+
 # --- prebuilt-binary installer ----------------------------------------------
 # usage: install_binary <name> <github-repo> <asset-regex> <binary-in-archive>
+# {arch} in the regex expands to this machine's ARCH_RE. When several assets
+# match, a musl build wins over gnu (static — survives old cluster glibc).
 install_binary() {
     local name=$1 repo=$2 pattern=$3 binpath=$4
+    pattern=${pattern//"{arch}"/"$ARCH_RE"}
     have curl || { err "curl missing"; return 1; }
     log "  fetching $name from github.com/$repo"
     local url
@@ -82,9 +97,9 @@ install_binary() {
 import sys, json, re
 d = json.load(sys.stdin)
 p = re.compile(r'$pattern')
-for a in d['assets']:
-    if p.search(a['name']):
-        print(a['browser_download_url']); break
+m = [a for a in d['assets'] if p.search(a['name'])]
+m.sort(key=lambda a: 'musl' not in a['name'])
+if m: print(m[0]['browser_download_url'])
 ")
     if [[ -z "$url" ]]; then err "no asset matched /$pattern/ for $name"; return 1; fi
     local tmp; tmp=$(mktemp -d)
@@ -131,10 +146,21 @@ install_via_paru() {
 }
 
 # --- dnf installer (fedora) --------------------------------------------------
-# A package missing from Fedora's repos just fails here, and install_tool
-# falls through to the prebuilt binary (starship, csvlens, yazi, zellij).
+# Availability is checked first (no sudo needed) so a tool missing from the
+# enabled repos falls through to the prebuilt binary without a sudo prompt.
 install_via_dnf() {
-    run "sudo dnf install -y '$1'"
+    local pkg=$1
+    have dnf || return 1
+    dnf -q info "$pkg" >/dev/null 2>&1 || return 1
+    run "sudo dnf install -y '$pkg'"
+}
+
+# Fedora's package name, for the few tools where it differs from arch/brew.
+fedora_pkg() {
+    case "$1" in
+        fd) echo fd-find ;;
+        *)  echo "$1" ;;
+    esac
 }
 
 # --- homebrew installer (mac) -------------------------------------------------
@@ -161,12 +187,12 @@ install_via_brew() {
 }
 
 # --- unified tool install ----------------------------------------------------
-# usage: install_tool <bin> <pkg-name> <github-repo> <asset-regex> <cargo-crate> [dnf-pkg]
-# <pkg-name> doubles as the paru package name (arch-root), the brew formula
-# name (mac) and the dnf package (fedora) — they match for every tool in the
-# list below except fd, which Fedora ships as fd-find (hence [dnf-pkg]).
+# usage: install_tool <bin> <pkg-name> <github-repo> <asset-regex> <cargo-crate>
+# <pkg-name> doubles as the paru package name (arch-root) and the brew formula
+# name (mac) — they happen to match for every tool in the list below. Fedora
+# differs for a couple, so fedora-root maps it through fedora_pkg.
 install_tool() {
-    local bin=$1 arch_pkg=$2 repo=$3 pattern=$4 crate=$5 dnf_pkg=${6:-$2}
+    local bin=$1 arch_pkg=$2 repo=$3 pattern=$4 crate=$5
     if have "$bin" && ((!FORCE)); then
         log "$bin: already installed ($(command -v "$bin"))"
         return 0
@@ -176,11 +202,11 @@ install_tool() {
         arch-root)
             install_via_paru "$arch_pkg" && return 0
             ;;
+        fedora-root)
+            install_via_dnf "$(fedora_pkg "$arch_pkg")" && return 0
+            ;;
         mac)
             install_via_brew "$arch_pkg" && return 0
-            ;;
-        fedora)
-            install_via_dnf "$dnf_pkg" && return 0
             ;;
     esac
     # no-root path: prebuilt binary → cargo fallback → skip
@@ -230,56 +256,57 @@ setup_mac_essentials() {
     fi
 }
 
-if [[ "$ENVKIND" == "mac" ]]; then
-    ensure_brew
-    setup_mac_essentials
-fi
-
 # --- fedora-only bootstrap ----------------------------------------------------
-# Same role as setup_mac_essentials. Fedora's python3 is new enough for
-# tomllib, so only presence is checked. ghostty isn't in the official repos —
-# its docs point at the scottames/ghostty COPR. 'dnf-command(copr)' resolves to
-# the copr plugin on both dnf4 and dnf5.
+# Same role as setup_mac_essentials. ghostty isn't in Fedora's repos; its docs
+# point at the scottames/ghostty COPR, which builds for x86_64 and aarch64.
+# 'dnf-command(copr)' resolves to the copr plugin on both dnf4 and dnf5.
 setup_fedora_essentials() {
-    have python3 || install_via_dnf python3
+    if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
+        log "python3: installing (dnf, needed by theme-apply.py's tomllib)"
+        install_via_dnf python3 || warn "python3: dnf install failed"
+    fi
     if ! have fish; then
         log "fish: installing (dnf)"
-        install_via_dnf fish
+        install_via_dnf fish || warn "fish: dnf install failed"
     else
         log "fish: already installed ($(command -v fish))"
     fi
     if ! have ghostty; then
         log "ghostty: installing (dnf, scottames/ghostty COPR)"
-        install_via_dnf 'dnf-command(copr)'
-        run "sudo dnf copr enable -y scottames/ghostty"
-        install_via_dnf ghostty
+        run "sudo dnf install -y 'dnf-command(copr)' && sudo dnf -y copr enable scottames/ghostty && sudo dnf install -y ghostty" \
+            || warn "ghostty: dnf install failed"
     else
         log "ghostty: already installed ($(command -v ghostty))"
     fi
 }
 
-if [[ "$ENVKIND" == "fedora" ]]; then setup_fedora_essentials; fi
+if [[ "$ENVKIND" == "mac" ]]; then
+    ensure_brew
+    setup_mac_essentials
+fi
+if [[ "$ENVKIND" == "fedora-root" ]]; then setup_fedora_essentials; fi
 
 # --- tools -------------------------------------------------------------------
 # For no-root path: match the *asset name* from the release, not the binary name.
-# Pattern is a Python regex; we search (not match).
+# Pattern is a Python regex; we search (not match). {arch} = this machine's CPU.
+# eza/delta/csvlens ship no musl build for every arch, hence (musl|gnu).
 
-install_tool fzf     fzf     junegunn/fzf         'linux_amd64\.tar\.gz$'                    ''
-install_tool bat     bat     sharkdp/bat          'x86_64-unknown-linux-musl\.tar\.gz$'     'bat'
-install_tool eza     eza     eza-community/eza    'x86_64-unknown-linux-musl\.tar\.gz$'     'eza'
-install_tool fd      fd      sharkdp/fd           'x86_64-unknown-linux-musl\.tar\.gz$'     'fd-find'  'fd-find'
-install_tool rg      ripgrep BurntSushi/ripgrep   'x86_64-unknown-linux-musl\.tar\.gz$'     'ripgrep'
-install_tool zoxide  zoxide  ajeetdsouza/zoxide   'x86_64-unknown-linux-musl\.tar\.gz$'     'zoxide'
-install_tool delta   git-delta dandavison/delta   'x86_64-unknown-linux-musl\.tar\.gz$'     'git-delta'
-install_tool fastfetch fastfetch fastfetch-cli/fastfetch 'linux-amd64\.tar\.gz$'             ''
-install_tool btop    btop    aristocratos/btop    'x86_64-unknown-linux-musl\.tar\.gz$'      ''
-install_tool glow    glow    charmbracelet/glow   'Linux_x86_64\.tar\.gz$'                   ''
-install_tool starship starship starship/starship  'x86_64-unknown-linux-musl\.tar\.gz$'      'starship'
-install_tool csvlens csvlens YS-L/csvlens         'x86_64-unknown-linux-(musl|gnu)\.tar\.(gz|xz)$' 'csvlens'
-install_tool yazi    yazi    sxyazi/yazi          'x86_64-unknown-linux-musl\.zip$'                'yazi-fm'
+install_tool fzf     fzf     junegunn/fzf         'linux_{arch}\.tar\.gz$'                   ''
+install_tool bat     bat     sharkdp/bat          '{arch}-unknown-linux-musl\.tar\.gz$'      'bat'
+install_tool eza     eza     eza-community/eza    '{arch}-unknown-linux-(musl|gnu)\.tar\.gz$' 'eza'
+install_tool fd      fd      sharkdp/fd           '{arch}-unknown-linux-musl\.tar\.gz$'      'fd-find'
+install_tool rg      ripgrep BurntSushi/ripgrep   '{arch}-unknown-linux-musl\.tar\.gz$'      'ripgrep'
+install_tool zoxide  zoxide  ajeetdsouza/zoxide   '{arch}-unknown-linux-musl\.tar\.gz$'      'zoxide'
+install_tool delta   git-delta dandavison/delta   '{arch}-unknown-linux-(musl|gnu)\.tar\.gz$' 'git-delta'
+install_tool fastfetch fastfetch fastfetch-cli/fastfetch 'linux-{arch}\.tar\.gz$'            ''
+install_tool btop    btop    aristocratos/btop    '{arch}-unknown-linux-musl\.tar\.gz$'      ''
+install_tool glow    glow    charmbracelet/glow   'Linux_{arch}\.tar\.gz$'                   ''
+install_tool starship starship starship/starship  '{arch}-unknown-linux-musl\.tar\.gz$'      'starship'
+install_tool csvlens csvlens YS-L/csvlens         '{arch}-unknown-linux-(musl|gnu)\.tar\.(gz|xz)$' 'csvlens'
+install_tool yazi    yazi    sxyazi/yazi          '{arch}-unknown-linux-musl\.zip$'                'yazi-fm'
 # zellij ships prebuilt musl binaries and has a cargo crate, so every path
 # (paru/brew/prebuilt/cargo) can install it — no special-casing needed.
-install_tool zellij   zellij  zellij-org/zellij     'x86_64-unknown-linux-musl\.tar\.gz$'      'zellij'
+install_tool zellij   zellij  zellij-org/zellij     '{arch}-unknown-linux-musl\.tar\.gz$'      'zellij'
 
 # --- optional: build from source (helix, fish) ------------------------------
 ensure_rust() {
@@ -299,7 +326,7 @@ build_helix() {
         install_via_brew helix && return 0
         warn "helix: brew install failed, falling back to source build"
     fi
-    if [[ "$ENVKIND" == "fedora" ]]; then
+    if [[ "$ENVKIND" == "fedora-root" ]]; then
         install_via_dnf helix && return 0
         warn "helix: dnf install failed, falling back to source build"
     fi
@@ -390,6 +417,31 @@ deploy_karabiner() {
 
 if [[ "$ENVKIND" == "mac" ]]; then deploy_aerospace; deploy_karabiner; fi
 
+# --- hyprland config (linux, aerospace parity) --------------------------------
+# end-4's dots load ~/.config/hypr/custom/{general,rules,keybinds}.lua after
+# their own defaults and never overwrite them on update, so the
+# aerospace-style layer is symlinked in there. Back up pre-existing real files
+# once, same as aerospace.
+deploy_hyprland() {
+    local custom="$CONFIG/hypr/custom" f
+    log "deploying hyprland config"
+    if ! grep -qs 'custom.keybinds' "$CONFIG/hypr/hyprland.lua"; then
+        warn "hyprland: ~/.config/hypr/hyprland.lua doesn't load custom/*.lua (not end-4's dots?) — linking anyway, require() them yourself"
+    fi
+    run "mkdir -p '$custom'"
+    for f in general rules keybinds; do
+        if [[ -e "$custom/$f.lua" && ! -L "$custom/$f.lua" ]]; then
+            log "hyprland: existing custom/$f.lua found — backing up to $f.lua.bak"
+            run "mv '$custom/$f.lua' '$custom/$f.lua.bak'"
+        fi
+        run "ln -sfn '$DOTFILES/hyprland/$f.lua' '$custom/$f.lua'"
+    done
+    # apply now if we're inside a running session
+    if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then run "hyprctl reload >/dev/null"; fi
+}
+
+if have Hyprland; then deploy_hyprland; fi
+
 # --- starship config ---------------------------------------------------------
 # Only set the default on fresh installs — never stomp a user's chosen variant.
 if [[ ! -e "$CONFIG/starship.toml" ]]; then
@@ -400,8 +452,8 @@ else
 fi
 
 # --- ghostty patch (local only) ----------------------------------------------
-# Only the theme include is managed here; everything else in the config is
-# yours. Unlike kitty there's no remote-control setup to do — theme-apply.py
+# Only the theme include (and, on Linux, the shell) is managed here; everything
+# else in the config is yours. Unlike kitty there's no remote-control setup to do — theme-apply.py
 # repaints the live window with OSC escapes instead of a control socket, so
 # nothing needs enabling at the emulator end.
 patch_ghostty() {
@@ -426,6 +478,14 @@ patch_ghostty() {
         # that declares it, so the theme wins regardless of position — no
         # prepend dance like kitty's `include` needed. `?` = ignore if absent.
         run "printf '\nconfig-file = ?theme-current.conf\n' >> '$conf'"
+    fi
+    # Linux: pin the shell. Ghostty takes $SHELL over the passwd entry, and a
+    # desktop session started before chsh (below) keeps the old $SHELL until
+    # the next login — so every window would open bash. Left alone if you
+    # already set a command yourself.
+    if [[ "$ENVKIND" != "mac" ]] && have fish && ! grep -qE '^\s*command\s*=' "$conf"; then
+        log "ghostty: setting command = $(command -v fish)"
+        run "printf 'command = %s\n' '$(command -v fish)' >> '$conf'"
     fi
     # seed a theme if the file doesn't exist yet
     if [[ ! -f "$CONFIG/ghostty/theme-current.conf" ]]; then
@@ -487,7 +547,8 @@ setup_fish_shell() {
         warn "fish: not found — skipping default-shell change"
         return 0
     fi
-    if [[ "${SHELL:-}" == "$fish_path" ]]; then
+    # -ef, not ==: on usrmerged Linux /bin/fish and /usr/bin/fish are the same
+    if [[ "${SHELL:-}" -ef "$fish_path" ]]; then
         log "fish: already the default shell"
         return 0
     fi
@@ -499,7 +560,8 @@ setup_fish_shell() {
     run "chsh -s '$fish_path'"
 }
 
-if [[ "$ENVKIND" == "mac" || "$ENVKIND" == "fedora" ]]; then setup_fish_shell; fi
+if [[ "$ENVKIND" == "mac" || "$ENVKIND" == "fedora-root" ]]; then setup_fish_shell; fi
 
-log "done. restart ghostty (or hit super+shift+, to reload) to pick up config changes."
+if [[ "$ENVKIND" == "mac" ]]; then reload_key="super+shift+,"; else reload_key="ctrl+shift+,"; fi
+log "done. restart ghostty (or hit $reload_key to reload) to pick up config changes."
 log "run \`theme\` from fish to pick a theme."

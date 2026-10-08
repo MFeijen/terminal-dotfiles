@@ -44,6 +44,7 @@ Signals:
     OSC 4/10/11/12/17/19 on every owned tty (live palette swap — see set_colors_osc)
     (zellij watches config.kdl and live-reloads the inline theme on write — no signal)
     pkill -SIGUSR1 hx                       (helix config reload, buffer-safe)
+    SIGUSR2 → ghostty                       (config reload so new windows get the theme; Linux)
     pkill -SIGWINCH -f gtop                 (blessed full-repaint against new palette)
 """
 
@@ -540,9 +541,10 @@ def owned_ttys():
 def set_colors_osc(palette, ttys=None):
     """Repaint every open terminal via OSC escape sequences.
 
-    Ghostty has no remote-control CLI (kitty's `kitty @ set-colors`); its only
-    config-reload trigger is the super+shift+, keybind. So the live swap goes
-    out as the standard OSC color sequences instead — which the terminal
+    Ghostty has no remote-control CLI (kitty's `kitty @ set-colors`), and a
+    config reload (keybind, or SIGUSR2 — see reload_ghostty) only reaches the
+    local machine. So the live swap goes out as the standard OSC color
+    sequences instead — which the terminal
     applies instantly, needs no reload, and works verbatim over SSH (the
     cluster gets themed by the same call, rather than depending on the local
     emulator's palette leaking through).
@@ -593,6 +595,33 @@ def reload_helix():
     if not shutil.which("pkill"):
         return
     subprocess.run(["pkill", "-SIGUSR1", "-x", "hx"], check=False, capture_output=True)
+
+
+def reload_ghostty():
+    # OSC repaints the windows already open, but new ones are spawned by
+    # ghostty's long-running process (single-instance on Linux), which read
+    # theme-current.conf when it started — so they'd come up in the old theme.
+    # SIGUSR2 makes ghostty (1.2+) reload its config. Only sent to processes
+    # that catch it: an older ghostty doesn't, and an uncaught SIGUSR2
+    # terminates. No /proc (macOS) → nothing sent, reload with the keybind.
+    if not shutil.which("pgrep"):
+        return
+    pids = subprocess.run(
+        ["pgrep", "-x", "-u", str(os.getuid()), "ghostty"],
+        capture_output=True, text=True, check=False,
+    ).stdout.split()
+    for pid in pids:
+        try:
+            status = Path(f"/proc/{pid}/status").read_text()
+        except OSError:
+            continue
+        m = re.search(r"^SigCgt:\s*([0-9a-f]+)", status, re.M)
+        if not m or not int(m.group(1), 16) >> (signal.SIGUSR2 - 1) & 1:
+            continue
+        try:
+            os.kill(int(pid), signal.SIGUSR2)
+        except OSError:
+            pass
 
 
 def reload_gtop():
@@ -651,8 +680,12 @@ def apply(name, preview=False):
     set_colors_osc(palette)
     reload_helix()
     reload_gtop()
+    # ghostty reloads only on the final apply (Enter, or Esc's restore), not
+    # per preview step — OSC already repaints open windows while scrolling.
     if preview:
         print_swatch(name, palette)
+    else:
+        reload_ghostty()
 
 
 def apply_terminal(name, preview=False):
