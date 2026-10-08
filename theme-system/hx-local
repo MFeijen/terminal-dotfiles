@@ -1,0 +1,20 @@
+#!/bin/sh
+# helix, themed for the directory it opens in.
+#
+# The fish `hx` function can't be the only place that injects `-c`: yazi, git
+# and anything else that launches $EDITOR spawns the binary directly, where
+# fish functions don't exist. So this script is what $EDITOR names and what
+# the fish function delegates to — one path for every launch.
+#
+# Resolves from its own cwd rather than an inherited variable: yazi sets the
+# child's cwd to the folder you opened the file from, so navigating into
+# another project inside yazi still gets that project's theme.
+
+# An explicit -c/--config from the caller wins.
+case " $* " in
+    *" -c "* | *" --config "*) exec hx "$@" ;;
+esac
+
+cfg=$(python3 "$(dirname "$0")/theme-apply.py" --config-path 2>/dev/null)
+[ -n "$cfg" ] && exec hx -c "$cfg" "$@"
+exec hx "$@"

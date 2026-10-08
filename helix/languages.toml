@@ -1,9 +1,27 @@
 [language-server.texlab]
 command = "texlab"
 
-[language-server.ltex]
-command = "ltex-ls-plus"
+[language-server.harper-ls]
+command = "harper-ls"
+args = ["--stdio"]
 
 [[language]]
 name = "latex"
-language-servers = ["texlab", "ltex"]
+language-servers = ["texlab", "harper-ls"]
+# soft-wrap only for prose; code languages keep the global default (off)
+soft-wrap = { enable = true, max-wrap = 25, max-indent-retain = 40, wrap-indicator = "↪ " }
+
+[language-server.basedpyright]
+command = "basedpyright-langserver"
+args = ["--stdio"]
+
+[[language]]
+name = "python"
+language-servers = ["basedpyright", "ruff"]
+auto-format = true
+formatter = { command = "ruff", args = ["format", "-", "--stdin-filename", "%{buffer_name}"] }
+
+# basedpyright defaults to "recommended" (reportAny/reportUnknown*), which buries
+# numpy code in errors. "standard" = plain pyright behaviour.
+[language-server.basedpyright.config.basedpyright.analysis]
+typeCheckingMode = "standard"

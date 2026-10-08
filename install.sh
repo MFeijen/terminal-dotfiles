@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # install.sh — set up my CLI env on a fresh machine.
-# Idempotent. Safe to re-run. Detects arch+root vs rhel+noroot vs other.
+# Idempotent. Safe to re-run. Detects arch+root, mac, fedora, rhel+noroot, other.
 
 set -euo pipefail
 
@@ -58,6 +58,10 @@ detect_env() {
     if [[ "$(uname -s)" == "Darwin" ]]; then echo "mac"; return; fi
     if have pacman && sudo -v -n 2>/dev/null; then echo "arch-root"; return; fi
     if have pacman; then echo "arch-noroot"; return; fi
+    # Before the redhat-release check: Fedora has that file too. Matching ID=
+    # (not ID_LIKE=) matters — RHEL's ID_LIKE is "fedora", and clusters must
+    # stay on the no-root path. Assumes sudo, like mac; a desktop install.
+    if grep -qs '^ID=fedora' /etc/os-release; then echo "fedora"; return; fi
     if [[ -f /etc/redhat-release ]]; then echo "rhel-noroot"; return; fi
     if have apt-get && sudo -v -n 2>/dev/null; then echo "debian-root"; return; fi
     echo "generic"
@@ -126,6 +130,13 @@ install_via_paru() {
     fi
 }
 
+# --- dnf installer (fedora) --------------------------------------------------
+# A package missing from Fedora's repos just fails here, and install_tool
+# falls through to the prebuilt binary (starship, csvlens, yazi, zellij).
+install_via_dnf() {
+    run "sudo dnf install -y '$1'"
+}
+
 # --- homebrew installer (mac) -------------------------------------------------
 ensure_brew() {
     if ! have brew; then
@@ -150,11 +161,12 @@ install_via_brew() {
 }
 
 # --- unified tool install ----------------------------------------------------
-# usage: install_tool <bin> <pkg-name> <github-repo> <asset-regex> <cargo-crate>
-# <pkg-name> doubles as the paru package name (arch-root) and the brew formula
-# name (mac) — they happen to match for every tool in the list below.
+# usage: install_tool <bin> <pkg-name> <github-repo> <asset-regex> <cargo-crate> [dnf-pkg]
+# <pkg-name> doubles as the paru package name (arch-root), the brew formula
+# name (mac) and the dnf package (fedora) — they match for every tool in the
+# list below except fd, which Fedora ships as fd-find (hence [dnf-pkg]).
 install_tool() {
-    local bin=$1 arch_pkg=$2 repo=$3 pattern=$4 crate=$5
+    local bin=$1 arch_pkg=$2 repo=$3 pattern=$4 crate=$5 dnf_pkg=${6:-$2}
     if have "$bin" && ((!FORCE)); then
         log "$bin: already installed ($(command -v "$bin"))"
         return 0
@@ -166,6 +178,9 @@ install_tool() {
             ;;
         mac)
             install_via_brew "$arch_pkg" && return 0
+            ;;
+        fedora)
+            install_via_dnf "$dnf_pkg" && return 0
             ;;
     esac
     # no-root path: prebuilt binary → cargo fallback → skip
@@ -201,6 +216,12 @@ setup_mac_essentials() {
     else
         log "aerospace: already installed ($(command -v aerospace))"
     fi
+    if [[ ! -d /Applications/Karabiner-Elements.app ]]; then
+        log "karabiner-elements: installing (brew cask)"
+        install_via_brew karabiner-elements 1
+    else
+        log "karabiner-elements: already installed"
+    fi
     if ! have ghostty; then
         log "ghostty: installing (brew cask)"
         install_via_brew ghostty 1
@@ -214,6 +235,31 @@ if [[ "$ENVKIND" == "mac" ]]; then
     setup_mac_essentials
 fi
 
+# --- fedora-only bootstrap ----------------------------------------------------
+# Same role as setup_mac_essentials. Fedora's python3 is new enough for
+# tomllib, so only presence is checked. ghostty isn't in the official repos —
+# its docs point at the scottames/ghostty COPR. 'dnf-command(copr)' resolves to
+# the copr plugin on both dnf4 and dnf5.
+setup_fedora_essentials() {
+    have python3 || install_via_dnf python3
+    if ! have fish; then
+        log "fish: installing (dnf)"
+        install_via_dnf fish
+    else
+        log "fish: already installed ($(command -v fish))"
+    fi
+    if ! have ghostty; then
+        log "ghostty: installing (dnf, scottames/ghostty COPR)"
+        install_via_dnf 'dnf-command(copr)'
+        run "sudo dnf copr enable -y scottames/ghostty"
+        install_via_dnf ghostty
+    else
+        log "ghostty: already installed ($(command -v ghostty))"
+    fi
+}
+
+if [[ "$ENVKIND" == "fedora" ]]; then setup_fedora_essentials; fi
+
 # --- tools -------------------------------------------------------------------
 # For no-root path: match the *asset name* from the release, not the binary name.
 # Pattern is a Python regex; we search (not match).
@@ -221,7 +267,7 @@ fi
 install_tool fzf     fzf     junegunn/fzf         'linux_amd64\.tar\.gz$'                    ''
 install_tool bat     bat     sharkdp/bat          'x86_64-unknown-linux-musl\.tar\.gz$'     'bat'
 install_tool eza     eza     eza-community/eza    'x86_64-unknown-linux-musl\.tar\.gz$'     'eza'
-install_tool fd      fd      sharkdp/fd           'x86_64-unknown-linux-musl\.tar\.gz$'     'fd-find'
+install_tool fd      fd      sharkdp/fd           'x86_64-unknown-linux-musl\.tar\.gz$'     'fd-find'  'fd-find'
 install_tool rg      ripgrep BurntSushi/ripgrep   'x86_64-unknown-linux-musl\.tar\.gz$'     'ripgrep'
 install_tool zoxide  zoxide  ajeetdsouza/zoxide   'x86_64-unknown-linux-musl\.tar\.gz$'     'zoxide'
 install_tool delta   git-delta dandavison/delta   'x86_64-unknown-linux-musl\.tar\.gz$'     'git-delta'
@@ -252,6 +298,10 @@ build_helix() {
     if [[ "$ENVKIND" == "mac" ]]; then
         install_via_brew helix && return 0
         warn "helix: brew install failed, falling back to source build"
+    fi
+    if [[ "$ENVKIND" == "fedora" ]]; then
+        install_via_dnf helix && return 0
+        warn "helix: dnf install failed, falling back to source build"
     fi
     ensure_rust
 
@@ -325,7 +375,20 @@ deploy_aerospace() {
     run "ln -sfn '$DOTFILES/aerospace/aerospace.toml' '$HOME/.aerospace.toml'"
 }
 
-if [[ "$ENVKIND" == "mac" ]]; then deploy_aerospace; fi
+# --- karabiner config (mac only) ----------------------------------------------
+# Karabiner saves karabiner.json by atomic rename, which replaces a file
+# symlink with a real file — so link the whole directory (its documented
+# approach). Only karabiner.json is tracked; backups/assets are gitignored.
+deploy_karabiner() {
+    log "deploying karabiner config"
+    if [[ -e "$CONFIG/karabiner" && ! -L "$CONFIG/karabiner" ]]; then
+        log "karabiner: existing config dir found — backing up to karabiner.bak"
+        run "mv '$CONFIG/karabiner' '$CONFIG/karabiner.bak'"
+    fi
+    run "ln -sfn '$DOTFILES/karabiner' '$CONFIG/karabiner'"
+}
+
+if [[ "$ENVKIND" == "mac" ]]; then deploy_aerospace; deploy_karabiner; fi
 
 # --- starship config ---------------------------------------------------------
 # Only set the default on fresh installs — never stomp a user's chosen variant.
@@ -416,8 +479,8 @@ patch_bashrc_for_fish() {
 
 if ((CLUSTER)); then patch_bashrc_for_fish; fi
 
-# --- mac: set fish as the login shell ----------------------------------------
-setup_fish_shell_mac() {
+# --- mac/fedora: set fish as the login shell ---------------------------------
+setup_fish_shell() {
     local fish_path
     fish_path=$(command -v fish 2>/dev/null || true)
     if [[ -z "$fish_path" ]]; then
@@ -436,7 +499,7 @@ setup_fish_shell_mac() {
     run "chsh -s '$fish_path'"
 }
 
-if [[ "$ENVKIND" == "mac" ]]; then setup_fish_shell_mac; fi
+if [[ "$ENVKIND" == "mac" || "$ENVKIND" == "fedora" ]]; then setup_fish_shell; fi
 
 log "done. restart ghostty (or hit super+shift+, to reload) to pick up config changes."
 log "run \`theme\` from fish to pick a theme."

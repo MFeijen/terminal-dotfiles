@@ -1,34 +1,29 @@
 # Resolved at source time — `status -f` inside a function is the definition
 # file, but capturing it here keeps that out of every call site.
 set -g __theme_apply (dirname (status -f))/theme-apply.py
+set -g __theme_hx (dirname (status -f))/hx-local
 
 function __theme_sync --on-variable PWD --description "Re-theme this terminal for \$PWD"
     # Fast path: with no registry at all nothing is bound anywhere, so no
     # terminal can be locally painted and there is nothing to restore. Keeps cd
     # free (~50ms of python) for anyone not using folder-local themes.
-    if not test -e $HOME/.config/theme-system/local.toml
-        set -e HELIX_LOCAL_CONFIG
-        return
-    end
-    # Prints a helix config path when $PWD is bound to a local theme, nothing
-    # otherwise. Repaints this terminal either way (leaving a bound folder has
-    # to restore the global palette).
-    set -l cfg (python3 $__theme_apply --sync)
-    if test -n "$cfg"
-        set -gx HELIX_LOCAL_CONFIG $cfg
-    else
-        set -e HELIX_LOCAL_CONFIG
-    end
+    test -e $HOME/.config/theme-system/local.toml; or return
+    # Repaints whether or not $PWD is bound — leaving a bound folder has to
+    # restore the global palette.
+    python3 $__theme_apply --sync
 end
 
+# helix has no per-project theme, so a local theme reaches it as a whole
+# generated config passed with -c. The wrapper that does that is a script, not
+# this function, because most helix launches never go through fish: yazi, git
+# and anything else run $EDITOR directly.
 function hx --wraps hx --description "helix, using the folder-local theme when one is bound"
-    # helix has no per-project theme, so a local theme reaches it as a whole
-    # generated config. An explicit -c/--config from the caller wins.
-    if set -q HELIX_LOCAL_CONFIG; and not contains -- -c $argv; and not contains -- --config $argv
-        command hx -c $HELIX_LOCAL_CONFIG $argv
-    else
-        command hx $argv
-    end
+    $__theme_hx $argv
+end
+
+if type -q hx
+    set -gx EDITOR $__theme_hx
+    set -gx VISUAL $__theme_hx
 end
 
 function __theme_ssh_host --description "Canonical hostname ssh would connect to"

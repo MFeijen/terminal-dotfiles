@@ -11,6 +11,7 @@ Usage:
     theme-apply.py --local-clear          # drop $PWD's binding, repaint this terminal
     theme-apply.py --preview-local <name> # repaint this terminal only, print swatch
     theme-apply.py --sync                 # reconcile this terminal against $PWD
+    theme-apply.py --config-path          # print the `hx -c` config for $PWD, if bound
 
     theme-apply.py --ssh <host> <name>    # bind a host to a theme
     theme-apply.py --ssh-clear <host>     # drop a host's binding
@@ -307,12 +308,19 @@ def derive_palette(theme):
 # Internal palette keys → ghostty config keys. The ANSI 16 are handled
 # separately: ghostty spells them as repeated `palette = <n>=<hex>` lines
 # rather than kitty's one `colorN` key each.
+#
+# selection-background/-foreground are deliberately absent: ghostty applies
+# OSC 4/10/11/12 but ignores OSC 17/19, so a selection color written here is
+# read once at launch and then frozen — every live theme swap left mouse
+# selections painted in the palette the window opened with. Left unset,
+# ghostty inverts the *current* window bg/fg for selections, which OSC 10/11
+# do update. Costs the theme's own ui.selection hue; buys selection that
+# always matches what's on screen. (OSC 17/19 are still broadcast in
+# set_colors_osc for terminals that honor them.)
 GHOSTTY_KEYS = {
     "background": "background",
     "foreground": "foreground",
     "cursor": "cursor-color",
-    "selection_background": "selection-background",
-    "selection_foreground": "selection-foreground",
 }
 
 
@@ -656,16 +664,20 @@ def apply_terminal(name, preview=False):
 
 
 def sync():
-    """Reconcile this terminal with $PWD. Called from fish on every cd.
+    """Repaint this terminal for $PWD. Called from fish on every cd."""
+    name = resolve_local() or current_helix_theme()
+    if name:
+        apply_terminal(name)
 
-    Prints the `hx -c` config path when the directory is locally bound and
-    nothing when it isn't — the fish hx wrapper keys off exactly that.
+
+def config_path():
+    """Print the `hx -c` config for $PWD, nothing when it isn't bound.
+
+    Read at helix launch, not on cd: the hx-local wrapper keys off exactly
+    this, and resolving at launch is what lets a helix started from yazi pick
+    up the theme of whatever folder yazi had navigated into.
     """
     local = resolve_local()
-    name = local or current_helix_theme()
-    if not name:
-        return
-    apply_terminal(name)
     if local:
         print(write_helix_variant(local))
 
@@ -698,6 +710,9 @@ def main():
         return
     if args[0] == "--sync":
         sync()
+        return
+    if args[0] == "--config-path":
+        config_path()
         return
     if args[0] == "--local-clear":
         reg = read_registry()

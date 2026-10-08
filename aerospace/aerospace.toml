@@ -24,7 +24,7 @@ enable-normalization-opposite-orientation-for-nested-containers = true
 # See: https://nikitabobko.github.io/AeroSpace/guide#layouts
 # The 'accordion-padding' specifies the size of accordion padding
 # You can set 0 to disable the padding feature
-accordion-padding = 50
+accordion-padding = 30
 
 # Possible values: tiles|accordion
 default-root-container-layout = 'tiles'
@@ -124,19 +124,29 @@ gaps.outer.right =      5
     alt-comma = 'layout accordion horizontal vertical'
 
     # See: https://nikitabobko.github.io/AeroSpace/commands#focus
-    alt-h = 'focus left'
-    alt-j = 'focus down'
-    alt-k = 'focus up'
-    alt-l = 'focus right'
+    alt-h = 'focus --boundaries all-monitors-outer-frame left'
+    alt-left = 'focus --boundaries all-monitors-outer-frame left'
+    alt-j = 'focus --boundaries all-monitors-outer-frame down'
+    alt-down = 'focus --boundaries all-monitors-outer-frame down'
+    alt-k = 'focus --boundaries all-monitors-outer-frame up'
+    alt-up = 'focus --boundaries all-monitors-outer-frame up'
+    alt-l = 'focus --boundaries all-monitors-outer-frame right'
+    alt-right = 'focus --boundaries all-monitors-outer-frame right'
 
     # See: https://nikitabobko.github.io/AeroSpace/commands#move
-    alt-shift-h = 'move left'
-    alt-shift-j = 'move down'
-    alt-shift-k = 'move up'
-    alt-shift-l = 'move right'
+    alt-shift-h = 'move --boundaries all-monitors-outer-frame left'
+    alt-shift-left = 'move --boundaries all-monitors-outer-frame left'
+    alt-shift-j = 'move --boundaries all-monitors-outer-frame down'
+    alt-shift-down = 'move --boundaries all-monitors-outer-frame down'
+    alt-shift-k = 'move --boundaries all-monitors-outer-frame up'
+    alt-shift-up = 'move --boundaries all-monitors-outer-frame up'
+    alt-shift-l = 'move --boundaries all-monitors-outer-frame right'
+    alt-shift-right = 'move --boundaries all-monitors-outer-frame right'
 
     alt-ctrl-h = ['workspace --wrap-around prev']
     alt-ctrl-l = ['workspace --wrap-around next']
+    alt-ctrl-left = ['workspace --wrap-around prev']
+    alt-ctrl-right = ['workspace --wrap-around next']
 
     # See: https://nikitabobko.github.io/AeroSpace/commands#resize
     alt-minus = 'resize smart -50'
@@ -198,6 +208,10 @@ gaps.outer.right =      5
     j = 'resize height -50'
     k = 'resize height +50'
     l = 'resize width +50'
+    left = 'resize width -50'
+    down = 'resize height -50'
+    up = 'resize height +50'
+    right = 'resize width +50'
 
 # 'service' binding mode declaration.
 # See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes

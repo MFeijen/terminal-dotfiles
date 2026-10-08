@@ -440,3 +440,26 @@ colors move as you scroll.
 - User is technical, doesn't want hand-holding but does want the "why"
 - One question at a time during design discussions (grill-me pattern)
 - Confirm before destructive/system-wide changes
+
+## Folder-local theme now reaches helix from any launcher (2026-09-24)
+
+Reported as "hx doesn't switch color when I enter a new folder". The local
+theme only ever reached helix through the fish `hx` function, and fish
+functions don't exist in child processes — so `yazi` (which runs `$EDITOR`),
+git, and anything else launched the real binary with no `-c` and got the
+global theme. Confirmed on the live session: the running `hx` had yazi as its
+parent and no `-c` in its argv.
+
+Fix: `theme-system/hx-local`, a 3-line sh wrapper that is now what `$EDITOR`
+names *and* what the fish function delegates to — one injection point for
+every launch route. It resolves the binding from its **own cwd** (via the new
+`theme-apply.py --config-path`) rather than an inherited variable, which also
+fixes navigating into another project *inside* yazi: yazi spawns the editor
+with the hovered folder as cwd.
+
+Dropped with it: `HELIX_LOCAL_CONFIG` (nothing reads it now) and the variant
+write on every `cd` — `--sync` is purely the terminal repaint, and the variant
+is generated at helix launch instead. `--config-path` prints it, nothing else.
+
+Covered by `test_theme_local.py::test_hx_wrapper_injects_config` (fake `hx` on
+PATH, asserts the argv for bound/inherited/unbound dirs and an explicit `-c`).
