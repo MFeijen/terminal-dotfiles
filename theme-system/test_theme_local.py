@@ -53,6 +53,9 @@ def test_config_theme_swap():
     # only the top-level key, not a `theme = ` inside a later table
     out = swap('theme = "old"\n[editor]\ntheme = "x"\n', "new")
     assert out.count('"new"') == 1 and 'theme = "x"' in out
+    # btop: same swap on its own key, leaving lookalike keys alone
+    out = swap('color_theme = "Default"\ntheme_background = true\n', "cur", key="color_theme")
+    assert out == 'color_theme = "cur"\ntheme_background = true\n'
 
 
 def test_hx_wrapper_injects_config(tmp):

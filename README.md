@@ -156,6 +156,13 @@ live-reloads on write — no reload signal needed.
 
 Yazi and Claude Code inherit from ghostty's palette — no code needed there.
 
+btop paints in truecolor from its own theme file, so the OSC palette doesn't
+reach it. `theme-apply.py` writes `~/.config/btop/themes/theme-current.theme`
+from the same palette, pins `color_theme = "theme-current"` in
+`~/.config/btop/btop.conf`, and sends running btops `SIGUSR2` (btop's hot config
+reload). Like zellij, btop stays on the global theme in folder-local and
+per-host scopes.
+
 ### Folder-local themes
 
 `theme` sets the theme everywhere. `theme --local` binds the **current
