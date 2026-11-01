@@ -58,6 +58,17 @@ def test_config_theme_swap():
     assert out == 'color_theme = "cur"\ntheme_background = true\n'
 
 
+def test_rex_panes_skipped():
+    out = (
+        "  10    1 ??      /Applications/Ghostty.app/Contents/MacOS/ghostty\n"
+        "  11   10 ttys001 /usr/bin/login\n"
+        "  20    1 ??      /Users/me/Library/Application Support/x/Rex Server.app/Contents/MacOS/rex\n"
+        "  21   20 ttys004 /usr/bin/login\n"
+        "  22   21 ttys004 -fish\n"
+    )
+    assert ta.ttys_from_ps(out) == {"/dev/ttys001"}, "ghostty kept, rex pane dropped"
+
+
 def test_hx_wrapper_injects_config(tmp):
     """hx-local is what every launch route goes through, fish or not."""
     home = tmp / "home"
@@ -96,5 +107,6 @@ with tempfile.TemporaryDirectory() as d:
     test_resolve_walks_up(tmp)
     test_ssh_bindings(tmp)
     test_config_theme_swap()
+    test_rex_panes_skipped()
     test_hx_wrapper_injects_config(tmp)
 print("ok")

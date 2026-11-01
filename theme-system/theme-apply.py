@@ -577,6 +577,26 @@ def current_helix_theme():
     return m.group(1) if m else None
 
 
+def in_rex():
+    return "REX_SESSION" in os.environ
+
+
+def ttys_from_ps(out):
+    """ttys in `ps -xo pid=,ppid=,tty=,comm=` output, minus Rex panes.
+
+    Rex colors its panes from its own app theme, so they're left alone. A
+    Rex pane is a tty whose processes include a child of the rex server.
+    """
+    rows = [line.split(None, 3) for line in out.splitlines()]
+    rows = [r for r in rows if len(r) == 4]
+    rex = {pid for pid, _, _, comm in rows if comm.rsplit("/", 1)[-1] == "rex"}
+    ttys, rex_ttys = set(), set()
+    for _, ppid, tty, _ in rows:
+        if tty not in ("??", "?", "-"):
+            (rex_ttys if ppid in rex else ttys).add(f"/dev/{tty}")
+    return ttys - rex_ttys
+
+
 def owned_ttys():
     """Every tty with a process of ours on it — i.e. every open terminal.
 
@@ -586,13 +606,14 @@ def owned_ttys():
     """
     ttys = set()
     try:
-        out = subprocess.run(
-            ["ps", "-xo", "tty="], capture_output=True, text=True, check=False
-        ).stdout
-        ttys = {f"/dev/{t}" for t in out.split() if t not in ("??", "?", "-")}
+        ttys = ttys_from_ps(subprocess.run(
+            ["ps", "-xo", "pid=,ppid=,tty=,comm="],
+            capture_output=True, text=True, check=False,
+        ).stdout)
     except OSError:
         pass
-    ttys.add("/dev/tty")  # our own, in case ps missed it
+    if not in_rex():
+        ttys.add("/dev/tty")  # our own, in case ps missed it
     return sorted(ttys)
 
 
@@ -759,7 +780,7 @@ def apply(name, preview=False):
 def apply_terminal(name, preview=False):
     """Repaint the calling terminal only. Writes no global config."""
     palette = derive_palette(load_theme_chain(name))
-    set_colors_osc(palette, ttys=["/dev/tty"])
+    set_colors_osc(palette, ttys=[] if in_rex() else ["/dev/tty"])
     if preview:
         print_swatch(name, palette)
 
