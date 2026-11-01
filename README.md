@@ -101,6 +101,7 @@ Hyprland swaps Alt and Super, so Alt is the key that sends Super there:
 - `ls`/`ll`/`la`/`tree` → `eza`
 - `cat` → `bat`
 - `y` — yazi wrapper that `cd`s into the exit directory
+  (Enter on a folder opens Finder, `l` still enters it — `yazi/yazi.toml`, mac only)
 - `theme` — the theme picker (`--local` binds it to the current folder,
   `--ssh <host>` to a host)
 - `ssh` — wrapper that paints the terminal with the host's bound theme
