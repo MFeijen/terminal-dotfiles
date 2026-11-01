@@ -48,7 +48,6 @@ Signals:
     SIGUSR2 → ghostty                       (config reload so new windows get the theme; Linux)
     pkill -SIGWINCH -f gtop                 (blessed full-repaint against new palette)
     pkill -SIGUSR2 -x btop                  (btop config + theme hot reload)
-    rex do client.theme.import              (Rex app theme, for pane backgrounds)
 """
 
 import json
@@ -98,8 +97,6 @@ BTOP_CONFIG = HOME / ".config/btop/btop.conf"
 HELIX_CONFIG = HOME / ".config/helix/config.toml"
 LOCAL_REGISTRY = HOME / ".config/theme-system/local.toml"
 HELIX_VARIANT_DIR = HOME / ".cache/theme-system"
-# Rex only puts its CLI on PATH inside its own panes; this is the stable install.
-REX_BIN = HOME / "Library/Application Support/com.superlogical.rex/RexServer/Versions/Current/Rex Server.app/Contents/MacOS/rex"
 
 # zellij has no KDL include mechanism and only live-reloads themes defined
 # *inline* in the main config, so theme-apply.py owns a delimited block inside
@@ -707,30 +704,6 @@ def reload_btop():
     subprocess.run(["pkill", "-SIGUSR2", "-x", "btop"], check=False, capture_output=True)
 
 
-def reload_rex():
-    # Rex paints pane backgrounds from its own app theme and ignores OSC 11, so
-    # the palette broadcast can't reach them. Its importer reads a Ghostty theme
-    # file — the one write_ghostty_conf() just wrote — and selects it. The Rex
-    # theme is app-wide, so local and ssh scopes still can't change a Rex pane.
-    # Only when the app is running: rex would otherwise start a server, or fail
-    # on every apply for want of a client.
-    if not shutil.which("pgrep"):
-        return
-    if subprocess.run(["pgrep", "-x", "Rex"], capture_output=True).returncode:
-        return
-    try:
-        r = subprocess.run(
-            [shutil.which("rex") or REX_BIN, "--autostart=false",
-             "do", "client.theme.import", f"path={GHOSTTY_THEME_OUT}"],
-            capture_output=True, text=True, check=False,
-        )
-    except OSError:
-        return
-    if r.returncode:
-        # Usually "Turn on Remote Control in its Settings under Rex Server".
-        print(f"rex: {r.stderr.strip()}", file=sys.stderr)
-
-
 def print_swatch(name, palette):
     def sw(hex_color: str) -> str:
         r, g, b = int(hex_color[1:3], 16), int(hex_color[3:5], 16), int(hex_color[5:7], 16)
@@ -781,7 +754,6 @@ def apply(name, preview=False):
         print_swatch(name, palette)
     else:
         reload_ghostty()
-        reload_rex()
 
 
 def apply_terminal(name, preview=False):
