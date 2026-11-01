@@ -163,6 +163,11 @@ from the same palette, pins `color_theme = "theme-current"` in
 reload). Like zellij, btop stays on the global theme in folder-local and
 per-host scopes.
 
+Rex is left out: it paints panes from its own app theme (and ignores OSC 11), so
+`theme` never repaints a Rex pane. helix started inside Rex gets
+`base16_terminal` instead of the picked theme. That theme draws only with the
+pane's ANSI colors, so helix matches whatever Rex theme is selected.
+
 ### Folder-local themes
 
 `theme` sets the theme everywhere. `theme --local` binds the **current

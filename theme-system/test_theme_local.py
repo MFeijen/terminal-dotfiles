@@ -85,8 +85,11 @@ def test_hx_wrapper_injects_config(tmp):
     (bin_dir / "hx").write_text('#!/bin/sh\necho "$@"\n')
     (bin_dir / "hx").chmod(0o755)
 
-    def run(cwd, *args):
+    def run(cwd, *args, rex=False):
         env = dict(os.environ, HOME=str(home), PATH=f"{bin_dir}:{os.environ['PATH']}")
+        env.pop("REX_SESSION", None)
+        if rex:
+            env["REX_SESSION"] = "session:test"
         out = subprocess.run(
             [str(Path(__file__).parent / "hx-local"), *args],
             cwd=cwd, env=env, capture_output=True, text=True, check=True,
@@ -99,6 +102,9 @@ def test_hx_wrapper_injects_config(tmp):
     assert run(proj / "sub", "a.py") == f"-c {variant} a.py", "subdirs inherit it"
     assert run(home, "a.py") == "a.py", "unbound dir launches helix untouched"
     assert run(proj, "-c", "mine.toml") == "-c mine.toml", "explicit -c wins"
+    rex_variant = home / ".cache/theme-system/helix-base16_terminal.toml"
+    assert run(proj, "a.py", rex=True) == f"-c {rex_variant} a.py", "Rex beats the binding"
+    assert 'theme = "base16_terminal"' in rex_variant.read_text(), "Rex helix follows the pane"
 
 
 with tempfile.TemporaryDirectory() as d:

@@ -798,7 +798,13 @@ def config_path():
     Read at helix launch, not on cd: the hx-local wrapper keys off exactly
     this, and resolving at launch is what lets a helix started from yazi pick
     up the theme of whatever folder yazi had navigated into.
+
+    Inside Rex the pane keeps Rex's app colors, so helix gets a theme built
+    from the terminal's own ANSI palette instead of the theme-system one.
     """
+    if in_rex():
+        print(write_helix_variant("base16_terminal"))
+        return
     local = resolve_local()
     if local:
         print(write_helix_variant(local))
