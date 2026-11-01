@@ -72,12 +72,6 @@ end
 # be at ~/.dotfiles (e.g. cluster/mac clones may use a different name).
 set -l dotfiles_root (dirname (dirname (realpath (status -f))))
 
-# Theme picker — loaded from the dotfiles repo.
-set -l theme_picker $dotfiles_root/theme-system/theme-picker.fish
-if test -f $theme_picker
-    source $theme_picker
-end
-
 # Starship variant picker.
 set -l starship_picker $dotfiles_root/starship/starship-picker.fish
 if test -f $starship_picker

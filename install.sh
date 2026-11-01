@@ -220,16 +220,10 @@ install_tool() {
 }
 
 # --- mac-only bootstrap -------------------------------------------------------
-# fish, ghostty, and python3 (needed by theme-apply.py) aren't in the generic
-# install_tool list above since they need cask/shell-change/no-cargo-fallback
-# handling that doesn't apply to the other envs.
+# fish and ghostty aren't in the generic install_tool list above since they
+# need cask/shell-change/no-cargo-fallback handling that doesn't apply to the
+# other envs.
 setup_mac_essentials() {
-    # macOS ships an old /usr/bin/python3 (no tomllib, needs 3.11+) that
-    # shadows brew's — check the version actually on PATH, not just presence.
-    if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
-        log "python3: installing (brew, needed by theme-apply.py's tomllib)"
-        install_via_brew python
-    fi
     if ! have fish; then
         log "fish: installing (brew)"
         install_via_brew fish
@@ -261,10 +255,6 @@ setup_mac_essentials() {
 # point at the scottames/ghostty COPR, which builds for x86_64 and aarch64.
 # 'dnf-command(copr)' resolves to the copr plugin on both dnf4 and dnf5.
 setup_fedora_essentials() {
-    if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
-        log "python3: installing (dnf, needed by theme-apply.py's tomllib)"
-        install_via_dnf python3 || warn "python3: dnf install failed"
-    fi
     if ! have fish; then
         log "fish: installing (dnf)"
         install_via_dnf fish || warn "fish: dnf install failed"
@@ -377,11 +367,9 @@ log "deploying fish conf.d"
 run "ln -sfn '$DOTFILES/fish/env-setup.fish' '$CONFIG/fish/conf.d/env-setup.fish'"
 
 # --- helix config -------------------------------------------------------------
-# config.toml is helix's only config file (no include mechanism), and
-# theme-apply.py rewrites the `theme = "..."` line in place — so symlinking
-# the repo's copy in means theme switches edit the tracked file, same as
-# they already did before this was tracked. Back up any pre-existing real
-# file once so a hand-edited config isn't silently lost.
+# config.toml is helix's only config file (no include mechanism), so symlink
+# the repo's copy in. Back up any pre-existing real file once so a hand-edited
+# config isn't silently lost.
 log "deploying helix config"
 run "mkdir -p '$CONFIG/helix'"
 if [[ -e "$CONFIG/helix/config.toml" && ! -L "$CONFIG/helix/config.toml" ]]; then
@@ -452,10 +440,8 @@ else
 fi
 
 # --- ghostty patch (local only) ----------------------------------------------
-# Only the theme include (and, on Linux, the shell) is managed here; everything
-# else in the config is yours. Unlike kitty there's no remote-control setup to do — theme-apply.py
-# repaints the live window with OSC escapes instead of a control socket, so
-# nothing needs enabling at the emulator end.
+# Only a fresh config's seed (and, on Linux, the shell) is managed here;
+# everything else in the config is yours.
 patch_ghostty() {
     local conf="$CONFIG/ghostty/config"
     if [[ ! -f "$conf" ]]; then
@@ -470,15 +456,6 @@ patch_ghostty() {
         # down), so no `command` line is needed.
         run "mkdir -p '$CONFIG/ghostty' && printf 'macos-option-as-alt = true\nshell-integration-features = ssh-env,ssh-terminfo\n' > '$conf'"
     fi
-    if grep -q 'theme-current.conf' "$conf"; then
-        log "ghostty: theme-current.conf already included"
-    else
-        log "ghostty: including theme-current.conf"
-        # Appending is enough: ghostty applies a `config-file` *after* the file
-        # that declares it, so the theme wins regardless of position — no
-        # prepend dance like kitty's `include` needed. `?` = ignore if absent.
-        run "printf '\nconfig-file = ?theme-current.conf\n' >> '$conf'"
-    fi
     # Linux: pin the shell. Ghostty takes $SHELL over the passwd entry, and a
     # desktop session started before chsh (below) keeps the old $SHELL until
     # the next login — so every window would open bash. Left alone if you
@@ -487,30 +464,9 @@ patch_ghostty() {
         log "ghostty: setting command = $(command -v fish)"
         run "printf 'command = %s\n' '$(command -v fish)' >> '$conf'"
     fi
-    # seed a theme if the file doesn't exist yet
-    if [[ ! -f "$CONFIG/ghostty/theme-current.conf" ]]; then
-        run "python3 '$DOTFILES/theme-system/theme-apply.py' catppuccin_mocha"
-    fi
 }
 
-if have ghostty; then patch_ghostty; else log "ghostty not installed — theme-system files still deployed"; fi
-
-# --- zellij patch ------------------------------------------------------------
-# zellij has no KDL include mechanism and only live-reloads themes defined
-# inline in the main config, so theme-apply.py writes a managed block straight
-# into ~/.config/zellij/config.kdl. Seeding just means running it once if that
-# block isn't there yet (it creates config.kdl too if absent).
-patch_zellij() {
-    local conf="$CONFIG/zellij/config.kdl"
-    if grep -qs 'theme-system' "$conf"; then
-        log "zellij: theme block already present"
-    else
-        log "zellij: seeding theme block into config.kdl"
-        run "python3 '$DOTFILES/theme-system/theme-apply.py' catppuccin_mocha"
-    fi
-}
-
-if have zellij; then patch_zellij; else log "zellij not installed — theme-system files still deployed"; fi
+if have ghostty; then patch_ghostty; else log "ghostty not installed — skipping its patch"; fi
 
 # --- cluster-side bashrc patch ----------------------------------------------
 # Cluster login shells are typically bash. If ~/.bashrc launches fish
@@ -564,4 +520,3 @@ if [[ "$ENVKIND" == "mac" || "$ENVKIND" == "fedora-root" ]]; then setup_fish_she
 
 if [[ "$ENVKIND" == "mac" ]]; then reload_key="super+shift+,"; else reload_key="ctrl+shift+,"; fi
 log "done. restart ghostty (or hit $reload_key to reload) to pick up config changes."
-log "run \`theme\` from fish to pick a theme."

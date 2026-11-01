@@ -1,5 +1,9 @@
 # Handoff — CLI env & theme system
 
+> **The theme system was removed on 2026-11-01** (Rex themes its own panes;
+> helix is back to its own `:theme`). Everything below about `theme-system/`
+> is history — `git log -- theme-system` has the code.
+
 Everything a next session (or a fresh Claude) needs to pick this up cold.
 Written 2026-07-08.
 
