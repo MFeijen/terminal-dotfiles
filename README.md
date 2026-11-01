@@ -163,6 +163,13 @@ from the same palette, pins `color_theme = "theme-current"` in
 reload). Like zellij, btop stays on the global theme in folder-local and
 per-host scopes.
 
+Rex paints pane backgrounds from its own app theme and ignores OSC 11, so on the
+final pick (not while scrolling) `theme-apply.py` hands Rex the same
+`theme-current.conf` through `rex do client.theme.import`. Rex only takes that
+from outside the app with **Settings → Rex Server → Remote Control** on;
+otherwise `theme` prints Rex's refusal. The Rex theme is app-wide, so folder-local
+and per-host themes can't reach Rex panes.
+
 ### Folder-local themes
 
 `theme` sets the theme everywhere. `theme --local` binds the **current
